@@ -323,16 +323,6 @@ for i = 1:length(gParams.varinfo)
       end
     end
   end
-  % check enable/visible options
-  if isfield(gParams.varinfo{i},'enable') && isequal(gParams.varinfo{i}.enable,0)
-      set(gParams.ui.varentry{i},'enable','off');
-  end
-  if isfield(gParams.varinfo{i},'visible') && isequal(gParams.varinfo{i}.visible,0)
-    set(gParams.ui.varentry{i},'visible','off');
-    set(gParams.ui.varname(i),'visible','off');
-    set(gParams.ui.incdec{i}{1},'visible','off');
-    set(gParams.ui.incdec{i}{2},'visible','off');
-  end
 end
 
 % set ok and cancel callback
@@ -354,6 +344,19 @@ end
 for i = 1:length(gParams.varinfo)
   if isfield(gParams.varinfo{i},'controls')
     buttonHandler(i,1,1);
+  end
+end
+
+% check enable/visible options
+for i = 1:length(gParams.varinfo)
+  if isfield(gParams.varinfo{i},'enable') && isequal(gParams.varinfo{i}.enable,0)
+      set(gParams.ui.varentry{i},'enable','off');
+  end
+  if isfield(gParams.varinfo{i},'visible') && isequal(gParams.varinfo{i}.visible,0)
+    set(gParams.ui.varentry{i},'visible','off');
+    set(gParams.ui.varname(i),'visible','off');
+    set(gParams.ui.incdec{i}{1},'visible','off');
+    set(gParams.ui.incdec{i}{2},'visible','off');
   end
 end
 
@@ -570,10 +573,14 @@ if ~any(strcmp(gParams.varinfo{varnum}.type,{'string','stringarray'}))
   end
   % check for minmax violations
   if isfield(gParams.varinfo{varnum},'minmax')
-    if (val < gParams.varinfo{varnum}.minmax(1))
+    % check minimum value (second check is to make sure it has exceeded minimum by more
+    % than a tiny round-off problem)
+    if (val < gParams.varinfo{varnum}.minmax(1)) && ((gParams.varinfo{varnum}.minmax(1)-val) > 10e-12)
       disp(sprintf('(mrParamsDialog) Value %f lower than minimum %f',val,gParams.varinfo{varnum}.minmax(1)));
       val = [];
-    elseif (val > gParams.varinfo{varnum}.minmax(2))
+    % check maximum value (second check is to make sure it has exceeded minimum by more
+    % than a tiny round-off problem)
+    elseif (val > gParams.varinfo{varnum}.minmax(2)) && ((val - gParams.varinfo{varnum}.minmax(1)) > 10e-12)
       disp(sprintf('(mrParamsDialog) Value %f greater than maximum %f',val,gParams.varinfo{varnum}.minmax(2)));
       val = [];
     end
@@ -603,9 +610,19 @@ if ~any(strcmp(gParams.varinfo{varnum}.type,{'string','stringarray'}))
       for i = gParams.varinfo{varnum}.controls
         % enable or disable all the controlled fields
         if (val == 0)
-          set(gParams.ui.varentry{i},'Enable','off');
+	  % if set to not, then when this is off the controls is on
+	  if gParams.varinfo{varnum}.controlsNot
+	    set(gParams.ui.varentry{i},'Enable','on');
+	  else
+	    set(gParams.ui.varentry{i},'Enable','off');
+	  end
         else
-          set(gParams.ui.varentry{i},'Enable','on');
+	  % if set to not, then when this is off the controls is on
+	  if gParams.varinfo{varnum}.controlsNot
+	    set(gParams.ui.varentry{i},'Enable','off');
+	  else
+	    set(gParams.ui.varentry{i},'Enable','on');
+	  end
         end
         % now store the value currently being displayed
         if gParams.varinfo{i}.oldControlVal
@@ -739,6 +756,11 @@ if get(fignum,'userdata')
 else  
   global gParams
 
+  % display to text buffer
+  for i = 1:length(gParams.varinfo)
+    disp(sprintf('%s: %s\n',gParams.varinfo{i}.name,gParams.varinfo{i}.description));
+  end
+  
   % turn off menu/title etc.
   set(fignum,'MenuBar','none');
   set(fignum,'NumberTitle','off');
@@ -798,7 +820,9 @@ function helpcloseHandler(varargin)
 global gParams;
 
 set(gParams.fignum(2),'visible','off')
-set(gParams.helpButton,'string','Show Help');
+if ishandle(gParams.helpButton)
+  set(gParams.helpButton,'string','Show Help');
+end
 
 %%%%%%%%%%%%%%%%%%%%
 % callback for close

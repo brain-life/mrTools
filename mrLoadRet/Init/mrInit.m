@@ -34,7 +34,7 @@ maxFramePeriod = 100;  % that something weird's goin on
 % get session params
 if ieNotDefined('sessionParams')
   % get some defaults
-  if isfile('mrSession.mat')
+  if mlrIsFile('mrSession.mat')
     load mrSession
     magnet = putOnTopOfList(session.magnet,mrGetPref('magnet'));
     coil = putOnTopOfList(session.coil,mrGetPref('coil'));
@@ -90,7 +90,7 @@ end
 % get scan params
 if ieNotDefined('groupParams')
   % check for already existing mrSession
-  if isfile('mrSession.mat')
+  if mlrIsFile('mrSession.mat')
     load mrSession;
     nScans = length(groups(1).scanParams);
     for i = 1:nScans
@@ -108,12 +108,17 @@ if ieNotDefined('groupParams')
     for i = 1:length(scanFilenames);
       % read the nifti header
       imageHeader = mlrImageHeaderLoad(fullfile(scanDirName,scanFilenames{i}));
-      if imageHeader.nDim == 4
+      if ismember(imageHeader.nDim,[3 4])
 	nScans = nScans+1;
 	scanNames{end+1} = scanFilenames{i};
 	descriptions{end+1} = '';
-	totalFrames{end+1} = imageHeader.dim(4);
-	nFrames{end+1} = imageHeader.dim(4);
+  if imageHeader.nDim==4
+    totalFrames{end+1} = imageHeader.dim(4);
+    nFrames{end+1} = imageHeader.dim(4);
+  else
+    totalFrames{end+1} = 1;
+    nFrames{end+1} = 1;
+  end
 	junkFrames{end+1} = 0;
       else
 	disp(sprintf('(mrInit) File %s is not a 4D Nifti file',scanFilenames{i}));
@@ -255,7 +260,7 @@ if ~justGetParams
     end
     
     % check for mrSession
-    if isfile('mrSession.mat')
+    if mlrIsFile('mrSession.mat')
       if askuser('(mrInit) mrSession.mat already exists. Overwrite?');
 	disp(sprintf('(mrInit) Copying old mrSession.mat mrSession.old.mat'));
 	movefile('mrSession.mat','mrSession.old.mat');

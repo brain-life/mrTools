@@ -674,7 +674,7 @@ switch lower(param)
     [tseriesPath,tseriesFile] = fileparts(viewGet(view,'tseriesPath',s,g));
     % check for mat file
     matFileName = fullfile(tseriesPath,sprintf('%s.mat',tseriesFile));
-    if isfile(matFileName)
+    if mlrIsFile(matFileName)
       load(matFileName);
       if exist('concatInfo')
         val = concatInfo;
@@ -694,7 +694,7 @@ switch lower(param)
     if ~isempty(stimFileName)
       for j = 1:length(stimFileName)
         % load this stimfile
-        if ~isfile(stimFileName{j})
+        if ~mlrIsFile(stimFileName{j})
           mrErrorDlg(sprintf('viewGet %s: Could not find stimfile %s',param,stimFileName{j}));
         else
           val{j}=load(stimFileName{j});
@@ -794,7 +794,7 @@ switch lower(param)
     if ~isempty(eyeposFileName)
       for j = 1:length(eyeposFileName)
         % load this eyepos file
-        if ~isfile(sprintf('%s.mat',stripext(eyeposFileName{j})))
+        if ~mlrIsFile(sprintf('%s.mat',stripext(eyeposFileName{j})))
           mrErrorDlg(sprintf('viewGet %s: Could not find eyepos file %s',param,eyeposFileName{j}));
         else
           eyepos=load(eyeposFileName{j});
@@ -847,20 +847,26 @@ switch lower(param)
     if isempty(dicom)
       return
     end
+    missingDicoms = false;
     for i = 1:length(dicom)
       if isfield(dicom{i},'MRAcquisitionType')
 	thisval = dicom{i}.MRAcquisitionType;
       elseif isfield(dicom{i},'ACQ') && isfield(dicom{i}.ACQ,'MR_Acquisition_Type_')
         thisval = strcmp(dicom{i}.ACQ.MR_Acquisition_Type_,'3D');
       else
-	thisval = [];
+          % no dicom
+          missingDicoms = true;
+	      thisval = [];
       end
       if (isempty(val))
         val = thisval;
-      elseif (val ~= thisval)
+      elseif ~isempty(thisval) && ~isequal(val,thisval)
         disp(sprintf('(viewGet:3D) Data collected with both 3D and 2D sequence types'))
       end
     end
+    if missingDicoms && ~isempty(val)
+      disp(sprintf('(viewGet:3D) Missing dicom headers for some component scans. Assuming all scans are %s',val))
+    end   
   case {'tr'}
     % TR is the TR of the pulse sequence. It is *not* necessarily
     % the time between volumes (framePeriod). The TR is extracted
@@ -915,7 +921,7 @@ switch lower(param)
     [tseriesPath,tseriesFile] = fileparts(viewGet(view,'tseriesPath',s,g));
     dicomName{1} = fullfile(tseriesPath,sprintf('%s-header.txt',tseriesFile));
     % if the file does not exist, then check original
-    if ~isfile(dicomName{1})
+    if ~mlrIsFile(dicomName{1})
       dicomName = {};
       [os og] = viewGet(view,'originalScanNum',s,g);
       if ~isempty(os)
@@ -981,7 +987,7 @@ switch lower(param)
     [s g] = getScanAndGroup(view,varargin,param);
     % get the tseries name
     [tSeriesPath tSeriesName] = fileparts(viewGet(view,'tSeriesPathStr',s,g));
-    if isfile(fullfile(tSeriesPath,sprintf('%s.mat',tSeriesName)))
+    if mlrIsFile(fullfile(tSeriesPath,sprintf('%s.mat',tSeriesName)))
       load(fullfile(tSeriesPath,sprintf('%s.mat',tSeriesName)));
       if exist('transforms') == 1
         val = transforms;
@@ -993,7 +999,7 @@ switch lower(param)
     [s g] = getScanAndGroup(view,varargin,param);
     % get the tseries name
     [tSeriesPath tSeriesName] = fileparts(viewGet(view,'tSeriesPathStr',s,g));
-    if isfile(fullfile(tSeriesPath,sprintf('%s.mat',tSeriesName)))
+    if mlrIsFile(fullfile(tSeriesPath,sprintf('%s.mat',tSeriesName)))
       val = load(fullfile(tSeriesPath,sprintf('%s.mat',tSeriesName)));
     end
   case{'niftihdr'}
@@ -1397,6 +1403,14 @@ switch lower(param)
   case {'curbase','currentbase'}
     % baseNum = viewGet(view,'currentBase')
     val = view.curBase;
+  case {'displaygyrussulcusboundary'}
+    % val = viewGet(view,'displaygyrussulcusboundary')
+    % whether to display the gyrus/sulcus boundary on flat maps
+    if isfield(view,'displayGyrusSulcusBoundary')
+      val = view.displayGyrusSulcusBoundary;
+    else
+      val = 0;
+    end
   case{'basenum'}
     % baseNum = viewGet(view,'baseNum',baseName)
     baseName = varargin{1};
@@ -1467,6 +1481,17 @@ switch lower(param)
       % set to empty if handle is stale 
       if ~ishandle(val),val = [];end
     end
+  case {'surfaceroihandle'}
+    % basedata = viewGet(view,'baseHandle',[baseNum])
+    b = getBaseNum(view,varargin);
+    n = viewGet(view,'numberofbasevolumes');
+    if b & (b > 0) & (b <= n)
+      if isfield(view.baseVolumes(b),'hROI')
+        val = view.baseVolumes(b).hROI;
+      end
+      % set to empty if handle is stale 
+      if ~ishandle(val),val = [];end
+    end
   case {'basehdr'}
     % basedata = viewGet(view,'basehdr',[baseNum])
     b = getBaseNum(view,varargin);
@@ -1514,7 +1539,7 @@ switch lower(param)
 	    end
 	    % not found, give up
 	    if isempty(subjectDir)
-	      disp(sprintf('(viewGet:baseCoordMapPath) Could not find a matchind subjectDir in %s',volumeDirectory));
+	      disp(sprintf('(viewGet:baseCoordMapPath) Could not find a matching subjectDir in %s',volumeDirectory));
 	    else
 	      % set to return subjectDir in case we don't find the surfRelax directory
 	      val = subjectDir;
@@ -1524,7 +1549,7 @@ switch lower(param)
 		if isdir(fullfile(subjectDir,possibleSurfDirNames{i}))
 		  % then return that, if it contains the WM surface file
 		  val = fullfile(subjectDir,possibleSurfDirNames{i});
-		  if isfile(fullfile(val,innerCoordsFilename)),return,end
+		  if mlrIsFile(fullfile(val,innerCoordsFilename)),return,end
 		end
 	      end
 	      % look for the FreeSurfer directory, which should either directly contain the innerCoordsFilename
@@ -1533,7 +1558,7 @@ switch lower(param)
 	      for i = 1:length(subjectDirListing)
 		if subjectDirListing(i).isdir
 		  % see if the file is directly here
-		  if isfile(fullfile(subjectDir,subjectDirListing(i).name,innerCoordsFilename))
+		  if mlrIsFile(fullfile(subjectDir,subjectDirListing(i).name,innerCoordsFilename))
 		    % found it, return the directory
 		    val = fullfile(subjectDir,subjectDirListing(i).name);
 		    return
@@ -1545,7 +1570,7 @@ switch lower(param)
 		    val = surfRelaxDir;
 		    % return this one if we find the innerCoords - it is likely correct, if not
 		    % will continue searching to see if we find the file in some other directory
-		    if isfile(fullfile(val,innerCoordsFilename))
+		    if mlrIsFile(fullfile(val,innerCoordsFilename))
 		      return
 		    end
 		  end
@@ -1562,7 +1587,7 @@ switch lower(param)
     n = viewGet(view,'numberofbasevolumes');
     % get number of cortical depth bins
     if ieNotDefined('varargin') || (length(varargin)<2)
-      corticalDepths = 0:1/(viewGet(view,'corticalDepthBins')-1):1;
+      corticalDepths = 0:1/(mrGetPref('corticalDepthBins')-1):1;
     else
       corticalDepths = varargin{2};
     end
@@ -1585,10 +1610,14 @@ switch lower(param)
     end
   case {'basesurface'}
     % basedata = viewGet(view,'baseSurface',[baseNum],[corticalDepth])
+    % 
+    % This is to get the coordinates of the surface to display. 
+    % To get the actual coordinates of the surface in the base space, 
+    % use: viewGet(view,'baseSurfaceCoords',[baseNum],[corticalDepth])
     b = getBaseNum(view,varargin);
     % get cortical depth
     if ieNotDefined('varargin') || (length(varargin)<2)
-      corticalDepth = viewGet(view,'corticalDepth');
+      corticalDepth = viewGet(view,'corticalDepth',b);
     else
       corticalDepth = varargin{2};
     end
@@ -1598,7 +1627,7 @@ switch lower(param)
       coordMap = view.baseVolumes(b).coordMap;
       if ~isempty(coordMap)
 	if isfield(coordMap,'innerVtcs') && isfield(coordMap,'outerVtcs')
-	  % find intermideate values
+	  % find intermediate values
 	  vtcs = coordMap.innerVtcs + mean(corticalDepth)*(coordMap.outerVtcs-coordMap.innerVtcs);
 	  val.tris = coordMap.tris;
 	elseif isfield(coordMap,'innerVtcs')
@@ -1614,11 +1643,59 @@ switch lower(param)
 	  val.vtcs(:,1) = vtcs(:,2);
 	  val.vtcs(:,2) = vtcs(:,1);
 	  val.vtcs(:,3) = vtcs(:,3);
+	else
+	  val.vtcs = [];
 	end
       else
 	val = [];
       end
     end
+  case {'basesurfacecoords'}
+    % basedata = viewGet(view,'baseSurfaceCoords',[baseNum],[corticalDepth])
+    % 
+    % This is to get the coordinates of the surface in the base space. 
+    % To get the actual coordinates of the surface to display, 
+    % use: viewGet(view,'baseSurface',[baseNum],[corticalDepth])
+    b = getBaseNum(view,varargin);
+    % get cortical depth
+    if ieNotDefined('varargin') || (length(varargin)<2)
+      corticalDepth = viewGet(view,'corticalDepth',b);
+    else
+      corticalDepth = varargin{2};
+    end
+    n = viewGet(view,'numberofbasevolumes');
+    if b & (b > 0) & (b <= n)
+      % get coordmap
+      coordMap = view.baseVolumes(b).coordMap;
+      if ~isempty(coordMap)
+	if isfield(coordMap,'innerCoords')
+    innerCoords = permute(coordMap.innerCoords,[2 4 1 3]);
+    if  isfield(coordMap,'outerVtcs')
+      outerCoords = permute(coordMap.outerCoords,[2 4 1 3]);
+      % find intermediate values
+      vtcs = innerCoords + mean(corticalDepth)*(outerCoords-innerCoords);
+    else
+      % if only inner is present then just return that
+      vtcs = coordMap.innerVtcs;
+   end
+	  val.tris = coordMap.tris;
+	else
+	  vtcs = [];
+	  val.tris = [];
+	end
+	% center surface
+	if ~isempty(vtcs)
+	  val.vtcs(:,1) = vtcs(:,2);
+	  val.vtcs(:,2) = vtcs(:,1);
+	  val.vtcs(:,3) = vtcs(:,3);
+	else
+	  val.vtcs = [];
+	end
+      else
+	val = [];
+      end
+    end
+    
   case {'baseclip'}
     % baseclip = viewGet(view,'baseclip',[baseNum])
     b = getBaseNum(view,varargin);
@@ -1639,6 +1716,32 @@ switch lower(param)
 	val = view.baseVolumes(b).surfaceRotate;
       end
     end
+  case {'rotate'} 
+    % rotate = viewGet(view,'rotate');
+    baseType = viewGet(view,'baseType');
+    % rotation is dependent on the base type
+    % since surfaces aren't rotated in the
+    % same way, they are rotated through
+    % rotateSurface
+    val = 0;
+    if baseType <= 1
+      curBase = viewGet(view,'curBase');
+      if ~isempty(curBase)
+        val = view.baseVolumes(curBase).rotate;
+      end
+    end
+  case {'rotatesurface','surfacerotate'}
+    % rotate = viewGet(view,'rotateSurface');
+    % rotate = viewGet(view,'surfacerotate');
+    baseType = viewGet(view,'baseType');
+    % surfacerotate applies to surfaces or volumes in 3D or multislice view
+    val = 0;
+    if baseType == 2 || (baseType == 0 && viewGet(view,'baseMultiAxis')>0)
+      curBase = viewGet(view,'curBase');
+      if ~isempty(curBase)
+        val = view.baseVolumes(curBase).surfaceRotate;
+      end
+    end
   case {'basetilt'}
     % baserotate = viewGet(view,'baseTilt',[baseNum])
     b = getBaseNum(view,varargin);
@@ -1646,7 +1749,7 @@ switch lower(param)
     if b & (b > 0) & (b <= n)
       val = view.baseVolumes(b).tilt;
     end
-  case {'basecurslice','baseslice'}
+  case {'basecurslice','baseslice','curslice','currentslice'}
     % baseslice = viewGet(view,'baseslice',[baseNum])
     val = 1;
     b = getBaseNum(view,varargin);
@@ -1689,14 +1792,34 @@ switch lower(param)
     else
       disp(sprintf('(viewGet:baseRawSlice) baseNum: %i out of range',b));
     end
-  case {'basecorticaldepth'}
-    % baseslice = viewGet(view,'baseCorticalDepth',[baseNum])
+  case {'basecorticaldepth','corticaldepth','curcorticaldepth'}
+    % corticaldepth = viewGet(view,'corticaldepth',[baseNum]);
+    % corticaldepth = viewGet(view,'basecorticaldepth',[baseNum]);
+    % corticaldepth = viewGet(view,'curcorticaldepth',[baseNum]);
     b = getBaseNum(view,varargin);
     n = viewGet(view,'numberofbasevolumes');
     if b & (b > 0) & (b <= n)
-      val = view.baseVolumes(b).curCorticalDepth;
+      val = sort(view.baseVolumes(b).curCorticalDepth);
     end
-  case {'basesliceorientation'}
+  case {'corticalmindepth','basecorticalmindepth','mincorticaldepth'}
+    % corticalmindepth = viewGet(view,'corticalmindepth',[baseNum])
+    % corticalmindepth = viewGet(view,'basecorticalmindepth',[baseNum])
+    % corticalmindepth = viewGet(view,'mincorticaldepth',[baseNum])
+    b = getBaseNum(view,varargin);
+    n = viewGet(view,'numberofbasevolumes');
+    if b & (b > 0) & (b <= n)
+      val = min(view.baseVolumes(b).curCorticalDepth);
+    end
+  case {'corticalmaxdepth','basecorticalmaxdepth','maxcorticaldepth'}
+    % corticalmaxdepth = viewGet(view,'corticalmaxdepth',[baseNum]);
+    % corticalmaxdepth = viewGet(view,'basecorticalmaxdepth',[baseNum]);
+    % corticalmaxdepth = viewGet(view,'maxcorticaldepth',[baseNum])
+    b = getBaseNum(view,varargin);
+    n = viewGet(view,'numberofbasevolumes');
+    if b & (b > 0) & (b <= n)
+      val = max(view.baseVolumes(b).curCorticalDepth);
+    end
+  case {'basesliceorientation','sliceorientation'}
     % basesliceOrientation = viewGet(view,'baseSliceOrientation',[baseNum])
     b = getBaseNum(view,varargin);
     n = viewGet(view,'numberofbasevolumes');
@@ -1759,11 +1882,20 @@ switch lower(param)
   case {'basemultidisplay'}
     % baseMultiDisplay = viewGet(view,'baseMultiDisplay',[baseNum])
     % sets whether the base will display even if it is not the
-    % current basy
+    % current base
     b = getBaseNum(view,varargin);
     n = viewGet(view,'numberofbasevolumes');
     if b & (b > 0) & (b <= n)
       val = view.baseVolumes(b).multiDisplay;
+    end
+  case {'basemultidisplaycontours'}
+    % baseMultiDisplayContours = viewGet(view,'baseMultiDisplayContours',[baseNum])
+    % sets whether the (surface) base will be displayed
+    % on top of the current (volume) base
+    b = getBaseNum(view,varargin);
+    n = viewGet(view,'numberofbasevolumes');
+    if b & (b > 0) & (b <= n)
+      val = view.baseVolumes(b).multiDisplayContours;
     end
   case {'basemultiaxis'}
     % baseMultiAxis = viewGet(view,'baseMultiDisplay',[baseNum])
@@ -1799,13 +1931,15 @@ switch lower(param)
         val(3) = 1;
       end
     end
-  case {'basecurcoords'}
+  case {'basecurcoords','curcoords','currentcoordinates'}
     % baseCurCoords = viewGet(view,'baseCurCoords',[baseNum])
-    % baseCurCoords = viewGet(view,'baseCurCoords',[])
-    % baseCurCoords = viewGet(view,'baseCurCoords')
+    % baseCurCoords = viewGet(view,'curCoords',[baseNum])
+    % baseCurCoords = viewGet(view,'currentcoordinates',[baseNum])
     b = getBaseNum(view,varargin);
     if ~isempty(b)
       val = view.baseVolumes(b).curCoords;
+      % for a 2D image, make sure that the 3rd value is set to one
+      if length(val) == 2,val(3) = 1;end
     end
   case{'base2tal'}
     % xform = viewGet(view,'base2tal',[baseNum])
@@ -1869,7 +2003,9 @@ switch lower(param)
           end
           baseqform = viewGet(view,'baseqform');
           val = baseqform * shiftOriginXform;
-        end
+        else
+	  disp(sprintf('(viewSet:base2mag) Unknown sform_code: %i',sform_code));
+	end
       end
       % if we are being asked for baseXform
       if strcmp(lower(param),'basexform') && ~isempty(val)
@@ -2171,11 +2307,11 @@ switch lower(param)
     sliceOrientation = viewGet(view,'sliceOrientation');
     permutation = viewGet(view,'baseVolPermutation',b);
     switch sliceOrientation
-      case 1   % Axial
+      case 1   % Sagittal
         [m,index] = max(permutation * [1 0 0]');
       case 2   % Coronal
         [m,index] = max(permutation * [0 1 0]');
-      case 3   % Sagittal
+      case 3   % Axial
         [m,index] = max(permutation * [0 0 1]');
     end
     val = index;
@@ -2641,23 +2777,33 @@ switch lower(param)
   case{'roicacheid'}
     % cacheID = viewGet(view,'ROICacheID')
     % cacheID = viewGet(view,'ROICacheID',roinum)
-    if ieNotDefined('varargin')
+    % cacheID = viewGet(view,'ROICacheID',roinum,basenum)
+    % cacheID = viewGet(view,'ROICacheID',roinum,basenum,rotate)
+    if length(varargin)<1
       % if we are not passed in a specific ROI, then
       % we are doing all ROIs
       roiNums = 1:length(view.ROIs);
     else
       roiNums = varargin{1};
     end
-    rotate = viewGet(view,'rotate');
+    if length(varargin)<2
+      baseNum = viewGet(view,'curBase');
+    else
+      baseNum = varargin{2};
+    end
+    if length(varargin)<3
+      rotate = viewGet(view,'rotate');
+    else
+      rotate = varargin{3};
+    end
     % go through all the bases and look for
     % the first one with a matching xform and
     % voxel size. We do this because flat maps
     % all have the same baseXform and voxle size
     % and so there is no need to recompute them
     % for each base map
-    baseXform = viewGet(view,'baseXform');
-    baseVoxelSize = viewGet(view,'baseVoxelSize');
-    baseMatch = viewGet(view,'curbase');
+    baseXform = viewGet(view,'baseXform',baseNum);
+    baseVoxelSize = viewGet(view,'baseVoxelSize',baseNum);
     for bnum = 1:viewGet(view,'numBase')
       if (isequal(baseXform,viewGet(view,'baseXform',bnum)) && ...
           isequal(baseVoxelSize,viewGet(view,'baseVoxelSize',bnum)))
@@ -2673,13 +2819,9 @@ switch lower(param)
   case{'roicache'}
     % cacheVal = viewGet(view,'ROICache')
     % cacheVal = viewGet(view,'ROICache',roinum)
-    if ieNotDefined('varargin')
-      % if we are not passed in a specific ROI, then
-      % we are doing all ROIs
-      roiID = viewGet(view,'ROICacheID');
-    else
-      roiID = viewGet(view,'ROICacheID',varargin{1});
-    end
+    % cacheVal = viewGet(view,'ROICache',roinum,basenum)
+    % cacheVal = viewGet(view,'ROICache',roinum,basenum,rotate)
+    roiID = viewGet(view,'ROICacheID',varargin{:});
     % and retrieve from the cache
     [val MLR.caches{view.viewNum}.roiCache] = ...
       mrCache('find',MLR.caches{view.viewNum}.roiCache,roiID);
@@ -2688,6 +2830,7 @@ switch lower(param)
     % cacheID = viewGet(view,'baseCacheID',baseNum);
     % cacheID = viewGet(view,'baseCacheID',baseNum,sliceNum);
     % cacheID = viewGet(view,'baseCacheID',baseNum,sliceNum,sliceIndex);
+    % cacheID = viewGet(view,'baseCacheID',baseNum,sliceNum,sliceIndex,surfaceNum);
     if length(varargin)<1
       baseNum = viewGet(view,'curBase');
     else
@@ -2708,16 +2851,27 @@ switch lower(param)
     else
       rotate = viewGet(view,'rotate');
     end
-    baseName = viewGet(view,'baseName',baseNum);
-    clip = viewGet(view,'baseClip',baseNum);
-    gamma = viewGet(view,'baseGamma',baseNum);
-    % only use the corticalDepth if this is a flat
-    if viewGet(view,'baseType')
-      corticalDepthBins = viewGet(view,'corticalDepthBins');
+    if length(varargin)>=5 %fifth argument is for the intersection of a surface base with a volume base
+      surfaceName = ['_' viewGet(view,'baseName',varargin{5})];
+      clipString = ''; %the intersection doesn't change with clip values,
+      gammaString = ''; % gamma values
+      baseNaNsColor = ''; % baseNaNsColor preference
+      corticalDepthBinsString = ''; % or number of cortical depth bins
     else
-      corticalDepthBins = 0;
+      surfaceName = ''; %for normal bases, this is unspecified
+      clip = viewGet(view,'baseClip',baseNum);
+      clipString = ['_' num2str(clip(1)) '_' num2str(clip(end))];
+      gammaString = ['_' num2str(viewGet(view,'baseGamma',baseNum))];
+      baseNaNsColor = ['_' mrGetPref('baseNaNsColor')];
+      % only use the corticalDepth if this is a flat base
+      if viewGet(view,'baseType')
+        corticalDepthBinsString = ['_' num2str(mrGetPref('corticalDepthBins'))];
+      else
+        corticalDepthBinsString = '';
+      end
     end
-    val = sprintf('%s_%i_%i_%i_%s_%s_%0.2f_%0.2f',baseName,currentSlice,sliceIndex,rotate,num2str(clip(1)),num2str(clip(end)),gamma,corticalDepthBins);
+    baseName = viewGet(view,'baseName',baseNum);
+    val = sprintf('%s_%i_%i_%i%s%s%s%s%s',baseName,currentSlice,sliceIndex,rotate,clipString,gammaString,corticalDepthBinsString,baseNaNsColor,surfaceName);
   case{'basecache'}
     % cacheVal = viewGet(view,'baseCache')
     % cacheVal = viewGet(view,'baseCache',baseNum)
@@ -2772,12 +2926,21 @@ switch lower(param)
         for i = 1:length(view.analyses{analysisNum}.overlays)
           clip = [clip view.analyses{analysisNum}.overlays(i).clip];
         end
-        overlayRange = view.analyses{analysisNum}.overlays(curOverlay).range;
+        % get overlay ranges for each selected overlay
+        overlayRange = [];
+        overlayColorRange = [];
+        alphaOverlayExponent = [];
+        for i = 1:length(curOverlay)
+          overlayRange = [overlayRange viewGet(view,'overlayRange',curOverlay(i))];
+          overlayColorRange = [overlayColorRange viewGet(view,'overlayColorRange',curOverlay(i))];
+          alphaOverlayExponent = [alphaOverlayExponent viewGet(view,'alphaOverlayExponent')];
+        end
         scanNum = viewGet(view,'curScan');
         alpha = viewGet(view,'alpha');
+        alphaOverlay = char(viewGet(view,'alphaOverlay'))';
         clipAcrossOverlays = viewGet(view,'clipAcrossOverlays');
         multiSliceProjection = mrGetPref('multiSliceProjectionMethod');
-        % need to recalculate overlay if this is aflat
+        % need to recalculate overlay if this is a flat
         % and the cortical depth has changed
         if viewGet(view,'baseType',baseNum)
           corticalDepth = viewGet(view,'corticalDepth');
@@ -2799,9 +2962,17 @@ switch lower(param)
 	  % the sum - again, this could fail be to unique, but
 	  % likely will be ok in most situations
 	  baseOverlay = sprinf('%f',sum(baseOverlay(:)));
-	end
+  end
+  % need to identify the colormap (in case it is changed using viewSet).
+  % will use the sum, which should work in most cases
+  overlaycmap = sum(sum(viewGet(view,'overlaycmap')));
         % calculate string
-        val = sprintf('%i_%s_%i_%i_%i_%s_%s_%s_%i_%i_%s_%i_%s_%f_%s',scanNum,baseName,curSlice,sliceIndex,analysisNum,mat2str(curOverlay),mat2str(clip),mat2str(overlayRange),rotate,alpha,mat2str(corticalDepth),clipAcrossOverlays,multiSliceProjection,baseOverlayAlpha,baseOverlay);
+        val = sprintf('%i_%s_%i_%i_%i_%s_%s_%s_%s_%i_%i_%s_%i_%s_%f_%s_%s_%i_%f.1',...
+                      scanNum,baseName,curSlice,sliceIndex,analysisNum,mat2str(curOverlay),...
+                      mat2str(clip),mat2str(overlayRange),mat2str(overlayColorRange),rotate,...
+                      alpha,mat2str(corticalDepth),clipAcrossOverlays,multiSliceProjection,...
+                      baseOverlayAlpha,baseOverlay,alphaOverlay(:)',mat2str(alphaOverlayExponent),...
+                      overlaycmap);
       end
     end
     %    val = curSlice*analysisNum*curOverlay;
@@ -3590,7 +3761,7 @@ switch lower(param)
       end
     end
   case {'alphaoverlay'}
-    % alphaoverlay = viewGet(view,'alphaOverlay',[overlaynumn])
+    % alphaoverlay = viewGet(view,'alphaOverlay',[overlaynum])
     analysisNum = viewGet(view,'currentAnalysis');
     if isempty(varargin) || isempty(varargin{1})
       overlayNum = viewGet(view,'currentOverlay',analysisNum);
@@ -3601,22 +3772,28 @@ switch lower(param)
     if ~isempty(analysis) & ~isempty(analysis.overlays)
       n = viewGet(view,'numberofOverlays',analysisNum);
       if overlayNum & (overlayNum > 0) & (overlayNum <= n)
-        val = {analysis.overlays(overlayNum).alphaOverlay};
+        for iOverlay=1:length(overlayNum)
+          val{iOverlay} = char(analysis.overlays(overlayNum(iOverlay)).alphaOverlay);
+        end
       end
       if length(val)==1
         val = val{1};
       end
     end
   case {'alphaoverlayexponent'}
-    % overlayclip = viewGet(view,'alphaOverlayExponent')
+    % overlayclip = viewGet(view,'alphaOverlayExponent',[overlaynum])
     val = 1;
     analysisNum = viewGet(view,'currentAnalysis');
-    overlayNum = viewGet(view,'currentOverlay',analysisNum);
+    if isempty(varargin) || isempty(varargin{1})
+      overlayNum = viewGet(view,'currentOverlay',analysisNum);
+    else
+      overlayNum = varargin{1};
+    end
     analysis = viewGet(view,'analysis',analysisNum);
     if ~isempty(analysis) & ~isempty(analysis.overlays)
       n = viewGet(view,'numberofOverlays',analysisNum);
-      if overlayNum & (overlayNum > 0) & (overlayNum <= n)
-        val = analysis.overlays(overlayNum).alphaOverlayExponent;
+      if overlayNum & all(overlayNum > 0) & all(overlayNum <= n)
+        val = [analysis.overlays(overlayNum).alphaOverlayExponent];
       end
     end
   case {'overlaycmap'}
@@ -3720,6 +3897,43 @@ switch lower(param)
       end
     end
     
+  case {'overlaycolorrange'}
+    % overlaycolorrange = viewGet(view,'overlaycolorrange',[overlayNum],[analysisNum])
+    % overlaycolorrange = viewGet(view,'overlaycolorrange',overlayNum,[])
+    % overlaycolorrange = viewGet(view,'overlaycolorrange',[],analysisNum)
+    % overlaycolorrange = viewGet(view,'overlaycolorrange',[],[])
+    % overlaycolorrange = viewGet(view,'overlaycolorrange',overlayNum)
+    % overlaycolorrange = viewGet(view,'overlaycolorrange')
+    if ieNotDefined('varargin')
+      analysisNum = viewGet(view,'currentAnalysis');
+      overlayNum = viewGet(view,'currentOverlay',analysisNum);
+    end
+    switch (length(varargin))
+      case 1
+        overlayNum = varargin{1};
+        analysisNum = viewGet(view,'currentAnalysis');
+      case 2
+        overlayNum = varargin{1};
+        analysisNum = varargin{2};
+    end
+    if isempty(analysisNum)
+      analysisNum = viewGet(view,'currentAnalysis');
+    end
+    if isempty(overlayNum)
+      overlayNum = viewGet(view,'currentOverlay',analysisNum);
+    end
+    analysis = viewGet(view,'analysis',analysisNum);
+    if ~isempty(analysis) & ~isempty(analysis.overlays)
+      n = viewGet(view,'numberofOverlays',analysisNum);
+      if overlayNum & (overlayNum > 0) & (overlayNum <= n)
+        if isfield(analysis.overlays(overlayNum),'colorRange') && ~isempty(analysis.overlays(overlayNum).colorRange)
+          val = analysis.overlays(overlayNum).colorRange;
+        else
+          val = analysis.overlays(overlayNum).range;
+        end
+      end
+    end
+    
   case {'overlayalpha'}
     % overlayalpha = viewGet(view,'overlayalpha',[overlayNum],[analysisNum])
     % overlayalpha = viewGet(view,'overlayalpha',overlayNum,[])
@@ -3816,10 +4030,7 @@ switch lower(param)
         val = analysis.overlays(overlayNum).interrogator;
       end
     end
-    if isempty(val)
-      val = 'timecoursePlot';
-    end
-  case {'overlaygroupname'}
+   case {'overlaygroupname'}
     % groupName = viewGet(view,'overlayGroupName',[overlayNum],[analysisNum])
     % groupName = viewGet(view,'overlayGroupName',overlayNum,[])
     % groupName = viewGet(view,'overlayGroupName',[],analysisNum)
@@ -4055,24 +4266,8 @@ switch lower(param)
     val = view.figure;
   case {'curscan','currentscan'}
     % scan = viewGet(view,'currentScan');
-    val = min(view.curScan,viewGet(view,'nscans'));
+    val = view.curScan;
     if isempty(val),val = 1;end
-  case {'curslice','currentslice'}
-    % slice = viewGet(view,'currentSlice');
-    if isfield(view.curslice,'sliceNum')
-      val = view.curslice.sliceNum;
-    end
-  case {'curcoords','currentcoordinates'}
-    % coords = viewGet(view,'currentCoordinates');
-    fig = viewGet(view,'fignum');
-    if ~isempty(fig)
-      handles = guidata(fig);
-      val = handles.coords;
-      % never let coords be 0
-      val(val==0) = 1;
-    else
-      val = [];
-    end
   case {'alpha'}
     % alpha = viewGet(view,'alpha',[overlaynum]);
     if isempty(varargin) || isempty(varargin{1})
@@ -4142,101 +4337,7 @@ switch lower(param)
         val = 1;
       end
     end
-  case {'rotate'}
-    % rotate = viewGet(view,'rotate');
-    baseType = viewGet(view,'baseType');
-    % rotation is dependent on the base type
-    % since surfaces aren't rotated in the
-    % same way, they are rotated through
-    % rotateSurface
-    if baseType <= 1
-      fig = viewGet(view,'fignum');
-      if ~isempty(fig)
-        handles = guidata(fig);
-	% adding 90 because this puts a typical base
-	% in the most natural orientation
-        val = get(handles.rotateSlider,'Value');
-      else
-        % otherwise gui is not running get from the structure
-        curBase = viewGet(view,'curBase');
-        if ~isempty(curBase)
-          val = view.baseVolumes(curBase).rotate;
-        else
-          val = 0;
-        end
-      end
-    else
-      val = 0;
-    end
-  case {'rotatesurface'}
-    % rotate = viewGet(view,'rotateSurface');
-    baseType = viewGet(view,'baseType');
-    if baseType == 2
-      fig = viewGet(view,'fignum');
-      if ~isempty(fig)
-        handles = guidata(fig);
-        % 360- is so that the anatomy rotates correct direction
-        val = 360-get(handles.rotateSlider,'Value');
-      else
-        val = 0;
-      end
-    elseif baseType == 0
-      val = 0;
-      % normally does not apply to inplanes, but if we are displaying
-      % all planes of anatomy then it applies to the 3D slice view
-      if viewGet(view,'baseMultiAxis')>0
-	fig = viewGet(view,'fignum');
-	if ~isempty(fig)
-	  handles = guidata(fig);
-	  val = 360-get(handles.rotateSlider,'Value');
-	end
-      end	  
-    end
     
-  case {'corticaldepthbins'}
-    % corticaldepthBins = viewGet(view,'corticaldepthBins');
-    val = mrGetPref('corticalDepthBins');
-    
-  case {'corticaldepth'}
-    % corticaldepth = viewGet(view,'corticaldepth');
-    val = sort([viewGet(view,'corticalMinDepth') viewGet(view,'corticalMaxDepth')]);
-    
-  case {'corticalmindepth'}
-    % corticalmindepth = viewGet(view,'corticalmindepth');
-    if isfield(view.curslice,'corticalDepth')
-      val = min(view.curslice.corticalDepth);
-    else
-      fig = viewGet(view,'fignum');
-      if ~isempty(fig)
-        handles = guidata(fig);
-        val = get(handles.corticalDepthSlider,'Value');
-    else
-      corticalDepthBins=viewGet(view,'corticaldepthbins');
-      val=round((corticalDepthBins-1)/2)/(corticalDepthBins-1);
-      end
-    end
-    
-  case {'corticalmaxdepth'}
-    % corticalmaxdepth = viewGet(view,'corticalmaxdepth');
-    if isfield(view.curslice,'corticalDepth')
-      val = max(view.curslice.corticalDepth);
-    else
-      fig = viewGet(view,'fignum');
-      if ~isempty(fig)
-        handles = guidata(fig);
-        if isfield(handles,'corticalMaxDepthSlider')
-          val = get(handles.corticalMaxDepthSlider,'Value');
-        else
-          val = [];
-        end
-      else
-        val = [];
-      end
-    end
-    
-  case {'sliceorientation'}
-    % sliceorientation = viewGet(view,'sliceorientation');
-    val = view.sliceOrientation;
   case {'cursliceoverlaycoords'}
     % overlayCoords = viewGet(view,'cursliceoverlaycoords');
     val = view.curslice.overlayCoords;
@@ -4677,7 +4778,7 @@ function stimFile = viewGetLoadStimFile(view,stimFileName)
 stimFileName = fullfile(viewGet(view,'etcDir'),stimFileName);
 
 % load this stimfile
-if ~isfile(stimFileName)
+if ~mlrIsFile(stimFileName)
   mrErrorDlg(sprintf('(viewGet:viewGetLoadStimfile): Could not find stimfile %s',stimFileName));
 else
   stimFile = load(stimFileName);

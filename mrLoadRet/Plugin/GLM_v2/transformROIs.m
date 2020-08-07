@@ -15,6 +15,16 @@ for iFile=1:length(transformFunctionFiles)
    transformFunctions{iFile} = stripext(transformFunctionFiles(iFile).name);
 end
 
+%get names of transform functions in additional folder(s)
+roiTransformPaths = commaDelimitedToCell(mrGetPref('roiTransformPaths'));
+for i = 1:length(roiTransformPaths)
+  roiTransformFiles =  dir([roiTransformPaths{i} '/*.m']);
+  for iFile=1:length(roiTransformFiles)
+     transformFunctions{end+1} = stripext(roiTransformFiles(iFile).name);
+  end
+end
+transformFunctions = sort(transformFunctions); %re-order in alphabetical order
+
 params.transformFunction = [{'User Defined'} transformFunctions];
 params.customTransformFunction = '';
 
@@ -113,7 +123,12 @@ for iCall = 1:length(rois)
   if strcmp(params.passRoiMode,'One ROI at a time')
     disp(sprintf('(transformROI) Calling %s for ROI %s', params.transformFunction, rois{iCall}.name));
   end
-  roi = eval([params.transformFunction '(rois{iCall}' functionString]);
+  try
+    roi = eval([params.transformFunction '(rois{iCall}' functionString]);
+  catch exception
+     mrWarnDlg(sprintf('(transformROI) There was an error evaluating function %s:\n%s',functionString,getReport(exception,'basic')));
+     return
+  end
   for iRoi = 1:length(roi)
     thisView = viewSet(thisView,'newROI',roi(iRoi));
     needToRefresh = 1;

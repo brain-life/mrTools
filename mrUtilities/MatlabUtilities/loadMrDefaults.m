@@ -1,6 +1,5 @@
-% loadMrDefaults
 %
-%      usage: loadMrDefaults()
+%      % loadMrDefaults: loadMrDefaults()
 %         by: justin gardner
 %       date: 03/17/07
 %    purpose: load default positions
@@ -20,8 +19,13 @@ end
 
 % load the defaults or set them to default values
 defaultsFilename = mrDefaultsFilename;
-if isfile(defaultsFilename)
+if mlrIsFile(defaultsFilename)
+  % this started warning about unresolved function handle
+  % did some code try to add a function handle to defaults?
+  % suppressing warning
+  warning('off','MATLAB:dispatcher:UnresolvedFunctionHandle');
   mrDefaults = load(defaultsFilename);
+  warning('on','MATLAB:dispatcher:UnresolvedFunctionHandle');
 else
     mrDefaults.prefs = [];
     mrDefaults.figloc = [];

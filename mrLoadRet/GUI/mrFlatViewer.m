@@ -31,13 +31,13 @@ end
 % if passed in a string check to see if
 % it needs an extension
 if isstr(flat)
-  if isfile(sprintf('%s.off',stripext(flat)));
+  if mlrIsFile(sprintf('%s.off',stripext(flat)));
     flat = sprintf('%s.off',stripext(flat));
   end
 end
 
 % see how we are being called
-if (nargin == 1) && isstr(flat) && ~isfile(flat)
+if (nargin == 1) && isstr(flat) && ~mlrIsFile(flat)
   event = flat;
 else
   event = 'init';
@@ -91,15 +91,47 @@ if isstr(flat{1})
   % remove any paths
   gFlatViewer.flat.parentSurfaceName = getLastDir(gFlatViewer.flat.parentSurfaceName);
 
-else
+elseif isfield(flat{1},'radius')
   % if this is a structure, then we are being called from makeFlat
   % with coordinates and a radius
   flatdir = [];
   gFlatViewer.path = flat{1}.path;
   flatPath = flat{1}.path;
-  gFlatViewer.flat = makeFlatFromRadius(flat{1},flat{1}.radius,flat{1}.startPoint,flat{1}.parentSurfaceName);
+  % convert start point from base space to world coordinates (the surfRelax
+  % space) because that's the space used by makeFlatFromRadius
+  if isempty(anat)
+    [filename, pathname] = uigetfile({'*.hdr;*.nii','Nifti file (*.hdr/*.nii)'},'Select 3D Anatomy File',flat{1}.path);
+    anat{1} = filename;
+    anatomyFile=[pathname filename];
+  elseif isempty(fileparts(anat{1}))
+  % if there is no path, we assume the base anatomy is in the same folder as the parent surface
+    anatomyFile=fullfile(flat{1}.path,anat{1});
+  else
+    anatomyFile=anat{1};
+    [~,anat{1},ext] = fileparts(anat{1}); %remove the path from anat{1}
+    anat{1} = [anat{1} ext];
+  end
+  %first convert coordinates from current base to the surface base 
+  hdr= cbiReadNiftiHeader(anatomyFile);
+  baseStartPoint = hdr.sform44 \ viewGet(viewNum,'basexform') * [flat{1}.startPoint';1];
+  array2worldXform = mlrXFormFromHeader(anatomyFile,'array2world');
+  worldStartPoint = array2worldXform*baseStartPoint;
+  gFlatViewer.flat = makeFlatFromRadius(flat{1},flat{1}.radius,worldStartPoint(1:3)',flat{1}.parentSurfaceName);
   if isempty(gFlatViewer.flat),return,end
+  % convert start point back to base coordinates to print flat name
+  arrayStartPoint = round(array2worldXform\[gFlatViewer.flat.startPoint';1]);
+  % set the name of the patch
+  gFlatViewer.flat.name = sprintf('%s_Flat_%i_%i_%i_Rad%i.off',stripext(flat{1}.parentSurfaceName),round(arrayStartPoint(1)),round(arrayStartPoint(2)),round(arrayStartPoint(3)),gFlatViewer.flat.radius);
+  gFlatViewer.flat.array2worldXform = array2worldXform;
   flat{1} = gFlatViewer.flat.name;
+
+elseif isfield(flat{1},'vtcs')
+  % is a passed in flat 
+  gFlatViewer.flat = flat{1};
+  flat{1} = gFlatViewer.flat.filename;
+  flatdir = [];
+  gFlatViewer.path = gFlatViewer.flat.path;
+  flatPath = gFlatViewer.path;
 end
 
 % look for flats with same parent
@@ -120,7 +152,7 @@ end
 checkForMore = 1;
 if isempty(inner)
   % guess the names
-  if isfile(fullfile(flatPath,gFlatViewer.flat.parentSurfaceName))
+  if mlrIsFile(fullfile(flatPath,gFlatViewer.flat.parentSurfaceName))
     inner{1} = gFlatViewer.flat.parentSurfaceName;
   else
     % go look for it
@@ -170,7 +202,7 @@ inner{end+1} = 'Find file';
 if isempty(outer)
   % if we weren't passed in anything try to find them
   filename = sprintf('%sGM.off',stripext(stripext(inner{1}),'WM'));
-  if isfile(fullfile(flatPath,filename))
+  if mlrIsFile(fullfile(flatPath,filename))
     outer{1} = filename;
   else
     % go look for it
@@ -216,9 +248,9 @@ checkForMore = 1;
 if isempty(curv)
   curvGuess = sprintf('%s_Curv.vff', fullfile(flatPath, stripext(inner{1})));
   secondCurvGuess = sprintf('%sCurv.vff', fullfile(flatPath, stripext(stripext(inner{1}),'WM')));
-  if isfile(curvGuess)
+  if mlrIsFile(curvGuess)
     curv{1} = getLastDir(curvGuess);
-  elseif isfile(secondCurvGuess)
+  elseif mlrIsFile(secondCurvGuess)
     curv{1} = getLastDir(secondCurvGuess);
   else
     % go look for it
@@ -292,7 +324,7 @@ for iAnat = 1:length(anat)
   % assume not valid at first
   validAnat(iAnat) = false;
   % check for file
-  if isfile(thisAnatName)
+  if mlrIsFile(thisAnatName)
     [gFlatViewer.anat.data gFlatViewer.anat.hdr] = mlrImageReadNifti(thisAnatName);
     % if no data, then there was a failure to load
     if isempty(gFlatViewer.anat.data)
@@ -313,6 +345,7 @@ if isempty(anat)
   mrWarnDlg('(mrFlatViewer) Could not find any valid 3D anatomies');
   return
 end
+anat{end+1} = 'Find file';
 
 % save the view
 gFlatViewer.viewNum = viewNum;
@@ -365,9 +398,9 @@ paramsInfo{end+1} = {'path', flatPath,'editable=0','The directory path to the fl
 if isfield(gFlatViewer.flat,'radius')
   paramsInfo{end+1} = {'flatFileName',flat{1},'editable=1','The flat patch file'};
   paramsInfo{end+1} = {'radius',gFlatViewer.flat.radius,'incdec=[-5 5]','minmax=[1 inf]','callback',@setFlatRadius,'Set the radius in mm of the flat patch'};
-  paramsInfo{end+1} = {'x',gFlatViewer.flat.startPoint(1),'incdec=[-10 10]','minmax=[1 inf]','callback',@setFlatStartPoint,'Set the start x position of patch. Note that if you modify this field it will get reset to the closest [x y s] point that is on the surface.'};
-  paramsInfo{end+1} = {'y',gFlatViewer.flat.startPoint(2),'incdec=[-10 10]','minmax=[1 inf]','callback',@setFlatStartPoint,'Set the start y position of patch. Note that if you modify this field it will get reset to the closest [x y s] point that is on the surface.'};
-  paramsInfo{end+1} = {'z',gFlatViewer.flat.startPoint(3),'incdec=[-10 10]','minmax=[1 inf]','callback',@setFlatStartPoint,'Set the start z position of patch. Note that if you modify this field it will get reset to the closest [x y s] point that is on the surface.'};
+  paramsInfo{end+1} = {'x',arrayStartPoint(1),'incdec=[-10 10]','minmax=[1 inf]','callback',@setFlatStartPoint,'Set the start x position of patch. Note that if you modify this field it will get reset to the closest [x y s] point that is on the surface.'};
+  paramsInfo{end+1} = {'y',arrayStartPoint(2),'incdec=[-10 10]','minmax=[1 inf]','callback',@setFlatStartPoint,'Set the start y position of patch. Note that if you modify this field it will get reset to the closest [x y s] point that is on the surface.'};
+  paramsInfo{end+1} = {'z',arrayStartPoint(3),'incdec=[-10 10]','minmax=[1 inf]','callback',@setFlatStartPoint,'Set the start z position of patch. Note that if you modify this field it will get reset to the closest [x y s] point that is on the surface.'};
 elseif ~editable && (length(flat) == 1)
   paramsInfo{end+1} = {'flatFileName',flat{1},'editable=0','The flat patch file'};
 else
@@ -388,11 +421,7 @@ if ~editable && (length(curv) == 1)
 else
   paramsInfo{end+1} = {'curvFileName',curv,'The curvature file','callback',@switchFile,'callbackArg=curvFileName'};
 end
-if ~editable && (length(anat) == 1)
-  paramsInfo{end+1} = {'anatFileName',anat{1},'editable=0','The 3D anatomy file'};
-else
-  paramsInfo{end+1} = {'anatFileName',anat,'The 3D anatomy file','callback',@switchAnatomy};
-end
+paramsInfo{end+1} = {'anatFileName',anat,'The 3D anatomy file','callback',@switchAnatomy};
 
 % put up dialog
 if isfield(gFlatViewer.flat,'radius')
@@ -1119,9 +1148,33 @@ function switchAnatomy(params)
 
 global gFlatViewer;
 
+% check for find file
+if strcmp(params.anatFileName,'Find file')
+  [filename, pathname] = uigetfile({'*.hdr;*.nii','Nifti file (*.hdr/*.nii)'},'Select 3D Anatomy File',gFlatViewer.path);
+  % update the control that displays the choices
+  % first check to see if this is a new path
+  global gParams;
+  if ~strcmp(pathname,gFlatViewer.path)
+    filename = fullfile(pathname,filename);
+  end
+  whichControl = gFlatViewer.guiloc.filenames+5;
+  currentChoices = get(gParams.ui.varentry{whichControl},'String');
+  currentChoices = setdiff(currentChoices,'Find file');
+  currentChoices = putOnTopOfList(filename,currentChoices);
+  currentChoices{end+1} = 'Find file';
+  set(gParams.ui.varentry{whichControl},'String',currentChoices)
+  set(gParams.ui.varentry{whichControl},'Value',1)
+  params.anatFileName = filename;
+end
+
 % load the anatomy and view
 disppercent(-inf,sprintf('(mrFlatViewer) Load %s',params.anatFileName));
-[gFlatViewer.anat.data gFlatViewer.anat.hdr] = mlrImageReadNifti(fullfile(params.path, params.anatFileName));
+if isempty(fileparts(params.anatFileName))
+  anatFileName=fullfile(gFlatViewer.path,params.anatFileName);
+else
+  anatFileName=params.anatFileName;
+end
+[gFlatViewer.anat.data gFlatViewer.anat.hdr] = mlrImageReadNifti(anatFileName);
 gFlatViewer = xformSurfaces(gFlatViewer);
 % switch to 3D anatomy view
 global gParams
@@ -1173,7 +1226,7 @@ disppercent(-inf,sprintf('(mrFlatViewer) Loading %s',filename));
 if filename ~= 0
   if strcmp(whichSurface,'curvFileName')
     file = myLoadCurvature(fullfile(params.path, filename));
-    whichControl = gFlatViewer.guiloc.filenames+3;;
+    whichControl = gFlatViewer.guiloc.filenames+4;
   else
     file = myLoadSurface(fullfile(params.path, filename));
     whichControl = gFlatViewer.guiloc.filenames+1+find(strcmp(whichSurface,{'outerCoordsFileName','innerCoordsFileName'}));
@@ -1323,8 +1376,8 @@ if nargin == 4
   mesh.uniqueVertices = surf.vtcs;
   mesh.uniqueFaceIndexList = surf.tris;
   mesh.connectionMatrix = findConnectionMatrix(mesh);
-  % note that here, we could pass in a scaling. As long
-  % as the volume is 1x1x1 mm, the scaling is in mm though.
+  % note that here, we could pass in a scaling if the volume is not 1x1x1 mm.
+  % instead we converted the startPoint in millimeters (world coordinates)
   flat.distanceMatrix = find3DNeighbourDists(mesh);
   % keep the parent name
   flat.parentSurfaceName = surfFileName;
@@ -1361,8 +1414,6 @@ flat.vtcs = flat.parent.vtcs(flat.patch2parent(:,2),:);
 % fill out rest of fields
 flat.Nedges = flat.Nvtcs+flat.Ntris-1;
 flat.nPatch = [flat.Nvtcs flat.Ntris flat.Nedges];
-% set the name of the patch
-flat.name = sprintf('%s_Flat_%i_%i_%i_Rad%i.off',stripext(flat.parentSurfaceName),flat.startPoint(1),flat.startPoint(2),flat.startPoint(3),flat.radius);
 
 %%%%%%%%%%%%%%%%%%%%%%%
 %%   setFlatRadius   %%
@@ -1379,6 +1430,8 @@ end
 
 % reset the patch for the current selected radius
 gFlatViewer.flat = makeFlatFromRadius(gFlatViewer.flat,params.radius);
+% set the name of the patch
+gFlatViewer.flat.name = sprintf('%s_Flat_%i_%i_%i_Rad%i.off',stripext(gFlatViewer.flat.parentSurfaceName),params.x,params.y,params.z,gFlatViewer.flat.radius);
 
 % and update name
 if (updateName)
@@ -1404,15 +1457,19 @@ if isempty(params.flatFileName) || strcmp(gFlatViewer.flat.name,params.flatFileN
   updateName = 1;
 end
 
-% reset the patch for the current selected radius
-gFlatViewer.flat = makeFlatFromRadius(gFlatViewer.flat,params.radius,[params.x params.y params.z]);
+% reset the patch for the current selected start point
+worldStartPoint = gFlatViewer.flat.array2worldXform*[params.x;params.y;params.z;1]; %convert start point from base to world coordinates
+gFlatViewer.flat = makeFlatFromRadius(gFlatViewer.flat,params.radius,worldStartPoint(1:3)');
 
 % and update location of startPoint
-params.x = gFlatViewer.flat.startPoint(1);
-params.y = gFlatViewer.flat.startPoint(2);
-params.z = gFlatViewer.flat.startPoint(3);
+arrayStartPoint = gFlatViewer.flat.array2worldXform\[gFlatViewer.flat.startPoint';1];
+params.x = round(arrayStartPoint(1));
+params.y = round(arrayStartPoint(2));
+params.z = round(arrayStartPoint(3));
+% set the name of the patch
+gFlatViewer.flat.name = sprintf('%s_Flat_%i_%i_%i_Rad%i.off',stripext(gFlatViewer.flat.parentSurfaceName),params.x,params.y,params.z,gFlatViewer.flat.radius);
 
-% and update name
+% and update name in GUI
 if (updateName)
   params.flatFileName = gFlatViewer.flat.name;
 end

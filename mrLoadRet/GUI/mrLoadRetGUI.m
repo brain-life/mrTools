@@ -188,20 +188,26 @@ delete(hObject);
 % --- Sagittal
 function sagittalRadioButton_Callback(hObject, eventdata, handles)
 viewNum = handles.viewNum;
-view = viewSet(viewNum,'sliceOrientation','sagittal');
-refreshMLRDisplay(viewNum);
+viewSet(viewNum,'sliceOrientation','sagittal');
+if ~viewGet(viewNum,'baseMultiAxis') %only in single slice view
+  refreshMLRDisplay(viewNum);
+end
 
 % --- Coronal
 function coronalRadioButton_Callback(hObject, eventdata, handles)
 viewNum = handles.viewNum;
-view = viewSet(viewNum,'sliceOrientation','coronal');
-refreshMLRDisplay(viewNum);
+viewSet(viewNum,'sliceOrientation','coronal');
+if ~viewGet(viewNum,'baseMultiAxis') %only in single slice view
+  refreshMLRDisplay(viewNum);
+end
 
 % --- Axial
 function axialRadioButton_Callback(hObject, eventdata, handles)
 viewNum = handles.viewNum;
-view = viewSet(viewNum,'sliceOrientation','axial');
-refreshMLRDisplay(viewNum);
+viewSet(viewNum,'sliceOrientation','axial');
+if ~viewGet(viewNum,'baseMultiAxis') %only in single slice view
+  refreshMLRDisplay(viewNum);
+end
 
 % --- Left
 function leftRadioButton_Callback(hObject, eventdata, handles)
@@ -233,11 +239,6 @@ mrGlobals
 viewNum = handles.viewNum;
 % Update the group number
 viewSet(viewNum,'curGroup',get(hObject,'Value'));
-% Delete the overlays
-%MLR.views{viewNum}.analyses = [];
-%MLR.views{viewNum}.curAnalysis = [];
-% Update nScans
-mlrGuiSet(viewNum,'nScans',viewGet(viewNum,'nScans'));
 % Refresh the display
 refreshMLRDisplay(viewNum);
 
@@ -330,12 +331,13 @@ viewNum = handles.viewNum;
 view = MLR.views{viewNum};
 
 value = round(str2num(get(hObject,'String')));
-if length(value)~=1 %if the user just erased the value, get it from the slider and do nothing
-  set(hObject,'String',num2str(get(handles.scanSlider,'value')));
+if length(value)~=1 %if the user just erased the value, get it from the view and do nothing
+  set(hObject,'String',num2str(viewGet(view,'curScan')));
 else %otherwise, set the new value in the view and the GUI
-  mlrGuiSet(viewNum,'scan',value);
+  %set the current scan in the view
   view = viewSet(view,'curScan',value);
-  viewSet(view,'curScan',get(handles.scanSlider,'Value'));
+  %set the current scan on slider
+  mlrGuiSet(viewNum,'scan',viewGet(view,'curScan'));
   refreshMLRDisplay(viewNum);
 end
 
@@ -363,10 +365,8 @@ viewNum = handles.viewNum;
 view = MLR.views{viewNum};
 
 value = round(get(hObject,'Value'));
-mlrGuiSet(viewNum,'sliceText',value);
-% set the current slice (get the value from the slider
-% since that will be properly clipped by the mlrGuiSet call above)
-viewSet(view,'curSlice',get(handles.sliceSlider,'Value'));
+mlrGuiSet(viewNum,'sliceText',value); %set slice edit box value
+viewSet(view,'curSlice',value); % set the current slice
 refreshMLRDisplay(viewNum);
 
 function sliceText_Callback(hObject, eventdata, handles)
@@ -379,9 +379,9 @@ view = MLR.views{viewNum};
 value = round(str2num(get(hObject,'String')));
 if length(value)~=1 %if the user just erased the value, get it from the slider and do nothing
   set(hObject,'String',num2str(get(handles.sliceSlider,'value')));
-else %otherwise, set the new value in the view and the GUI
-  mlrGuiSet(viewNum,'slice',value);
-  viewSet(view,'curSlice',value);
+else %otherwise, set the new value in the GUI and then in the view
+  mlrGuiSet(viewNum,'slice',value); %doing this first ensures that the value is not outside the values permitted by the slider
+  viewSet(view,'curSlice',get(handles.sliceSlider,'Value')); %use the value from the slider since it might have been changed by mlrGuiSet
   refreshMLRDisplay(viewNum);
 end
 
@@ -532,12 +532,8 @@ value = str2num(get(hObject,'String'));
 if length(value)~=1 %if the user just erased the value, get it from the slider and do nothing
   set(hObject,'String',num2str(get(handles.baseTiltSlider,'value')));
 else %otherwise, set the new value in the view and the GUI
-  if value < 0,value = 0;end
-  if value > 360,value = 360;end
   viewSet(viewNum,'tilt',value);
   v = viewGet([],'view',viewNum);
-  fig = viewGet(v,'figNum');
-  gui = guidata(fig);
 
   if (viewGet(v,'baseType') == 2)
     setMLRViewAngle(v);
@@ -571,12 +567,22 @@ refreshMLRDisplay(viewNum);
 function overlayMaxText_Callback(hObject, eventdata, handles)
 viewNum = handles.viewNum;
 value = str2num(get(hObject,'String'));
-if length(value) ~= 1 %if the user just erased the value, get it from the slider and do nothing
-  set(hObject,'String',num2str(get(handles.overlayMaxSlider,'value')));
-else %otherwise, set the new value in the view and the GUI
-  viewSet(viewNum,'overlayMax',value,viewGet(viewNum,'curClippingOverlay'));
-  refreshMLRDisplay(viewNum);
+if length(value) ~= 1 %if the user just erased the value
+  % then  get it from the slider
+  value = get(handles.overlayMaxSlider,'value');
+else
+  sliderMaxValue=get(handles.overlayMaxSlider,'max');
+  sliderMinValue=get(handles.overlayMinSlider,'min');
+  if value>sliderMaxValue %if the value is beyond the slider max
+    %set the new value as the new max range
+    viewSet(viewNum,'overlayRange',[sliderMinValue value]);
+  elseif value<sliderMinValue %if the value is below the slider min
+    value = sliderMinValue;
+  end
 end
+%set the new value in the view and the GUI
+viewSet(viewNum,'overlayMax',value,viewGet(viewNum,'curClippingOverlay'));
+refreshMLRDisplay(viewNum);
 
 % --- overlayMin
 function overlayMinSlider_CreateFcn(hObject, eventdata, handles)
@@ -604,11 +610,22 @@ function overlayMinText_Callback(hObject, eventdata, handles)
 viewNum = handles.viewNum;
 value = str2num(get(hObject,'String'));
 if length(value) ~= 1%if the user just erased the value, get it from the slider and do nothing
-  set(hObject,'String',num2str(get(handles.overlayMinSlider,'value')));
+  % then  get it from the slider
+  value = get(handles.overlayMinSlider,'value');
+%  set(hObject,'String',num2str(get(handles.overlayMinSlider,'value')));
 else %otherwise, set the new value in the view and the GUI
-  viewSet(viewNum,'overlayMin',value,viewGet(viewNum,'curClippingOverlay'));
-  refreshMLRDisplay(viewNum);
+  sliderMaxValue=get(handles.overlayMaxSlider,'max');
+  sliderMinValue=get(handles.overlayMinSlider,'min');
+  if value>sliderMaxValue %if the value is beyond the slider max
+    value = sliderMaxValue;
+  elseif value<sliderMinValue %if the value is below the slider min
+    %set the new value as the new min range
+    viewSet(viewNum,'overlayRange',[value sliderMaxValue]);
+%     value = sliderMinValue;
+  end
 end
+viewSet(viewNum,'overlayMin',value,viewGet(viewNum,'curClippingOverlay'));
+refreshMLRDisplay(viewNum);
 
 % --- alpha
 function alphaSlider_CreateFcn(hObject, eventdata, handles)
@@ -662,8 +679,8 @@ function rotateSlider_Callback(hObject, eventdata, handles)
 
 viewNum = handles.viewNum;
 value = get(hObject,'Value');
-mlrGuiSet(viewNum,'rotate',value);
 v = viewGet([],'view',viewNum);
+v = viewSet(v,'rotate',value);
 
 if (viewGet(v,'baseType') == 2)
   setMLRViewAngle(v);
@@ -677,9 +694,9 @@ value = str2num(get(hObject,'String'));
 if length(value)~=1 %if the user just erased the value, get it from the slider and do nothing
   set(hObject,'String',num2str(get(handles.rotateSlider,'value')));
 else %otherwise, set the new value in the view and the GUI
-  mlrGuiSet(viewNum,'rotate',value);
   v = viewGet([],'view',viewNum);
-
+  v = viewSet(v,'rotate',value);
+  
   if (viewGet(v,'baseType') == 2)
     setMLRViewAngle(v);
   else
@@ -728,7 +745,7 @@ v = MLR.views{viewNum};
 % get the tseries path/filename
 tSeriesPathStr = viewGet(v,'tSeriesPathStr',viewGet(v,'curScan'));
 % load that as an anatome
-if isfile(tSeriesPathStr)
+if mlrIsFile(tSeriesPathStr)
     v = loadAnat(MLR.views{viewNum},getLastDir(tSeriesPathStr),fileparts(tSeriesPathStr));
     refreshMLRDisplay(viewNum);
 else
@@ -949,15 +966,20 @@ end
 
 % get current roi name
 roiName = viewGet(v,'roiname');
-
-% put up dialog to select filename
-pathstr = putPathStrDialog(pwd,'Specify name of Nifti file to export ROI to',setext(roiName,mrGetPref('niftiFileExtension')));
-
-% pathstr = [] if aborted
-if ~isempty(pathstr)
-  mlrExportROI(v, pathstr);
+if ischar(roiName)
+  roiName={roiName};
 end
 
+pathstr = cell(0);
+for iRoi = 1:length(roiName)
+  % put up dialog to select filename
+  pathstr{iRoi} = putPathStrDialog(pwd,'Specify name of Nifti file to export ROI to',setext(roiName{iRoi},mrGetPref('niftiFileExtension')));
+  if isempty(pathstr{iRoi})
+    return
+  end
+end
+
+mlrExportROI(v, pathstr);
 
 % --------------------------------------------------------------------
 function exportImageMenuItem_Callback(hObject, eventdata, handles)
@@ -967,7 +989,6 @@ if ~isempty(pathstr)
     img = refreshMLRDisplay(handles.viewNum);
     imwrite(img, pathstr, 'tif');
 end
-
 
 % --------------------------------------------------------------------
 function readmeMenuItem_Callback(hObject, eventdata, handles)
@@ -1264,20 +1285,9 @@ viewNum = handles.viewNum;
 view = MLR.views{viewNum};
 userInput = inputdlg('Enter name for new analysis: ','New analysis');
 if ~isempty(userInput)
-    analysis.name = userInput{1};
-    analysis.type = 'dummy';
-    analysis.groupName = viewGet(view,'groupName',viewGet(view,'currentGroup'));
-    analysis.function = 'dummyAnalysis';
-    analysis.reconcileFunction = 'dummyAnalysisReconcileParams';
-    analysis.reconcileFunction = 'dummyAnalysisMergeParams';
-    analysis.guiFunction = 'dummyAnalysisGUI';
-    analysis.params = [];
-    analysis.overlays =[];
-    analysis.curOverlay = [];
-    analysis.date = datestr(now);
-    view = viewSet(view,'newanalysis',analysis);
+  newAnalysis(view,userInput{1});
+  refreshMLRDisplay(viewNum);
 end
-refreshMLRDisplay(viewNum);
 
 % --------------------------------------------------------------------
 function copyAnalysisMenuItem_Callback(hObject, eventdata, handles)
@@ -1416,6 +1426,10 @@ eval(evalstring);
 
 % --------------------------------------------------------------------
 function editOverlayMenu_Callback(hObject, eventdata, handles)
+% this doesn't do anything, but avoids a bug due to this function name
+% being associated with the Edit/Overlay menu in the GUI
+% in order to remove this, mrLoadRetGUI.guide would have to be modified
+% (same for other similar empty callbacks in this file)
 
 % --------------------------------------------------------------------
 function copyOverlayMenuItem_Callback(hObject, eventdata, handles)
@@ -1444,10 +1458,6 @@ function editOverlayMenuItem_Callback(hObject, eventdata, handles)
 mrGlobals;
 viewNum = handles.viewNum;
 editOverlayGUImrParams(viewNum);
-% view = MLR.views{viewNum};
-% view = editOverlayGUI(view);
-% view = viewSet(view,'overlayCache','init');
-% refreshMLRDisplay(viewNum);
 
 % --------------------------------------------------------------------
 function overlayInfoMenuItem_Callback(hObject, eventdata, handles)
@@ -2149,9 +2159,20 @@ mrGlobals;
 viewNum = handles.viewNum;
 view = MLR.views{viewNum};
 roiNames = viewGet(view,'roiNames');
+selectedRoiNames = viewGet(view,'roiName');
+if ischar(selectedRoiNames) || isempty(selectedRoiNames)
+  roiNames1 = putOnTopOfList(selectedRoiNames,roiNames);
+else
+  roiNames1 = putOnTopOfList(selectedRoiNames{1},roiNames);
+end
+if iscell(selectedRoiNames) && length(selectedRoiNames)>1
+  roiNames2 = putOnTopOfList(selectedRoiNames{2},roiNames);
+else
+  roiNames2=roiNames;
+end
 paramInfo = {...
-  {'combineROI',putOnTopOfList(viewGet(view,'roiName'),viewGet(view,'roiNames')),'type=popupmenu','The ROI that will be combined with the otherROI'},...
-  {'otherROI',roiNames,'type=popupmenu','The otherROI is combined with the combineROI and the result is put into combineROI.'},...
+  {'combineROI',roiNames1,'type=popupmenu','The ROI that will be combined with the otherROI'},...
+  {'otherROI',roiNames2,'type=popupmenu','The otherROI is combined with the combineROI and the result is put into combineROI.'},...
   {'action',{'A not B', 'Intersection', 'Union', 'XOR'},'type=popupmenu','Select action for combining ROIs.'},...
   {'newName','','Add a name here if you want to make the combination have a new roi name. Otherwise it will rewrite the combineROI.'},...
   {'combine',0,'type=pushbutton','callback',@doCombine,'passParams=1','callbackArg',viewNum,'buttonString=Do combination','Click this button to do the combination. This is the same as hitting OK but won''t close the dialog so you can continue to do more combinations'}};
@@ -2642,14 +2663,70 @@ end
 % switch directories to the flatDir, asking
 % the user to find it if it does not exist
 thispwd = pwd;
-if isdir(flatPath) && isfile(fullfile(flatPath,filename))
+if isdir(flatPath) && mlrIsFile(fullfile(flatPath,filename))
   cd(flatPath);
 else
-  mrWarnDlg(sprintf('(mrLoadRetGUI) File %s does not exist, please find the anatomy folder for this surface/flat',fullfile(flatPath,filename)));
-  pathStr = uigetdir(mrGetPref('volumeDirectory'),'Find anatomy folder from which this flat was created');
-  if pathStr == 0,return,end
-  cd(pathStr);
-  viewSet(v,'baseCoordMapPath',pathStr);
+  if baseType ~= 1
+    mrWarnDlg(sprintf('(mrLoadRetGUI) File %s does not exist, please find the anatomy folder for this surface/flat',fullfile(flatPath,filename)));
+    pathStr = uigetdir(mrGetPref('volumeDirectory'),'Find anatomy folder from which this flat was created');
+    if pathStr == 0,return,end
+    cd(pathStr);
+    viewSet(v,'baseCoordMapPath',pathStr);
+  else
+    % try to create the off for a flat
+    flatParentSurf = fullfile(params.path,params.innerCoordsFileName);
+    if mlrIsFile(flatParentSurf)
+      disp('(mrLoadRetGUI) Creating missing flat off surface');
+      disppercent(-inf,sprintf('(mrLoadRetGUI) Note this will create a quick flat surface good enough for rough visualization of location but is not exactly correct'));
+      % load the parent surface 
+      flatParentSurfOFF = loadSurfOFF(flatParentSurf);
+      if ~isempty(flatParentSurfOFF)
+	% find all vtcs that intersect
+	flatVtcs = [];
+	for corticalDepth = -0.5:0.05:1.5
+	  flatVtcs = [flatVtcs ; reshape(params.innerCoords + (params.outerCoords-params.innerCoords)*corticalDepth,size(params.innerCoords,1)*size(params.innerCoords,2),3)];
+	end
+	% match coordinate to find vertices that this was made from
+	%vtcs = assignToNearest(flatVtcs,flatParentSurfOFF.vtcs);
+	% round and linearize the vertices
+	flatVtcs = round(flatVtcs);
+	flatLinear = mrSub2ind(params.dims,flatVtcs(:,1), flatVtcs(:,2),flatVtcs(:,3));
+	parentVtcs = round(flatParentSurfOFF.vtcs);
+	flatParentLinear = mrSub2ind(params.dims,parentVtcs(:,1),parentVtcs(:,2),parentVtcs(:,3));
+	% find ones that match - note that this is an approximation
+	% by finding vertices that are wihtin a rounded mm to
+	% each other - also above we add across cortical depths.
+	% Could be more precise - but that might be slower
+	% and for this purposes (visualization of roughly
+	% where the surface is, seems good enough)
+	vtcs = find(ismember(flatParentLinear,flatLinear));
+	% find tris that these vtcs are associated with
+	matchingTris = flatParentSurfOFF.tris;
+	[triNum edgeNum] = find(ismember(matchingTris,vtcs));
+	tris = flatParentSurfOFF.tris(triNum,:);
+	% now reget the vertices that are in all the triangles
+	vtcs = unique(tris(:));
+	% and renumber the vtcs in the tris 
+	[dummy tris(:)] = ismember(tris(:),vtcs);
+	% ok, put it all togehter
+	flatSurf.filename = '';
+	flatSurf.nParent = [flatParentSurfOFF.Nvtcs flatParentSurfOFF.Ntris 1]; 
+	flatSurf.nPatch = [length(vtcs) size(tris,1) 1];
+	flatSurf.vtcs = flatParentSurfOFF.vtcs(vtcs,:);
+	flatSurf.tris = tris;
+	flatSurf.parentSurfaceName = flatParentSurf;
+	flatSurf.Nvtcs = length(vtcs);
+	flatSurf.Ntris = size(tris,1);
+	flatSurf.edges = 0;
+	flatSurf.patch2parent(:,1) = (1:length(vtcs))';
+	flatSurf.patch2parent(:,2) = vtcs';
+	flatSurf.path = params.path;
+	% put it into the params field
+	params.flatFileName = flatSurf;
+	disppercent(inf);
+      end
+    end
+  end
 end
 
 if baseType == 1
@@ -2680,12 +2757,12 @@ if ~exist('dijkstra') == 3
 else
   [dijkstraDistance,euclidianDistance] = calcDist(v, 'segments'); % ,'polygon',1);
   if length(dijkstraDistance)==1
-      disp(sprintf('Dijkstra Distance betwen pts A and B on surface: %2.4f', dijkstraDistance));
-      disp(sprintf('Euclidian 3D distance betwen pts A and B: %2.4f', euclidianDistance));
+      disp(sprintf('Dijkstra Distance betwen pts A and B on surface: %2.4f mm', dijkstraDistance));
+      disp(sprintf('Euclidian 3D distance betwen pts A and B: %2.4f mm', euclidianDistance));
   elseif length(dijkstraDistance)>1
-    disp('Dijkstra Distance between successive pairs of points on surface:');
+    disp('Dijkstra Distance between successive pairs of points on surface (in mm):');
     disp(dijkstraDistance');
-    disp('Euclidian 3D distance betwen successive pairs of points');
+    disp('Euclidian 3D distance betwen successive pairs of points (in mm):');
     disp(euclidianDistance');
   end
   refreshMLRDisplay(viewNum);

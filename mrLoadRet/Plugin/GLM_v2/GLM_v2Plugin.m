@@ -22,16 +22,16 @@ switch action
             '                  - average/projection over a range of cortical depths\n',...
             '                  - multiple ROI selection\n',... 
             '                  - folder mrLoadRet/Plugin/interrogatorFolder/interrogatorFunctions is scanned at MLR startup and functions to the default interrogator list',...
-            '                  - folder mrLoadRet/Plugin/colormapFolder/colormapFunctions is scanned at MLR startup and adds functions to the default colormap list',...
+            '                  - copy/paste several scans/overlay simultaneously',...
             'Added functions: - New item in menu Edit/Scan menu to unlink stimfiles',...
             '                 - New item in menu ROIs to transform ROIs with pre-defined or custom transformation functions',...
             '                 - Improved GLM analysis that subsumes event-related and "GLM" analyses in a common GLM framework with statistical inference tests (see http://www.psychology.nottingham.ac.uk/staff/ds1/lab/doku.php?id=analysis:glm_statistics_in_mrtools',...
             '                 - New item in Plot that calls a 3D viewer',...
             '                 - New item in menu Overlays to combine/transform overlays using virtually any type of function',...
-            '                 - Improved Edit/Overlay dialog',...
             '                 - Improved Export Images function',...
             '                 - New item in menu Analysis/Motioncomp to appy existing motion compensation parameters to another set of scans',...
             '                 - New item in menu edit/Base Anatomy/transforms to copy and paste sform',...
+            '                 - New GUI checkbox to display gyrus/sulcus boundary on flat maps',...
             ];
    retval ='Adds new functionalities to GUI, including improved GLM analysis';
    
@@ -79,13 +79,13 @@ switch action
     mlrAdjustGUI(thisView,'set','corticalDepth','position',       [0.02    0.815   0.07   0.055 ]);
     mlrAdjustGUI(thisView,'set','corticalDepth','fontSize',checkFontSize);
     mlrAdjustGUI(thisView,'set','corticalDepthSlider','position', [0.095   0.845   0.135  sliderHeight ]);
-    mlrAdjustGUI(thisView,'set','corticalDepthSlider','SliderStep',min(1/viewGet(thisView,'corticalDepthBins')*[1 3],1));
+    mlrAdjustGUI(thisView,'set','corticalDepthSlider','SliderStep',min(1/mrGetPref('corticalDepthBins')*[1 3],1));
     mlrAdjustGUI(thisView,'set','corticalDepthText','position',   [0.24    0.845   0.04   textEditHeight]);
     mlrAdjustGUI(thisView,'set','corticalDepthText','fontSize',controlFontSize);
     mlrAdjustGUI(thisView,'set','corticalDepthText','BackgroundColor', get(0,'defaultUicontrolBackgroundColor'));
-    corticalDepthBins=viewGet(thisView,'corticaldepthbins');
+    corticalDepthBins=mrGetPref('corticalDepthBins');
     corticalDepth=round((corticalDepthBins-1)/2)/(corticalDepthBins-1);
-    mlrAdjustGUI(thisView,'add','control','corticalMaxDepthSlider','SliderStep',min(1/(viewGet(thisView,'corticalDepthBins')-1)*[1 3],1),...
+    mlrAdjustGUI(thisView,'add','control','corticalMaxDepthSlider','SliderStep',min(1/(mrGetPref('corticalDepthBins')-1)*[1 3],1),...
         'Callback',@corticalMaxDepthSlider_Callback,'visible',corticalDepthVisibility,'value',corticalDepth,...
                                      'style','slider','position', [0.095   0.82    0.135  sliderHeight ]);
     mlrAdjustGUI(thisView,'add','control','corticalMaxDepthText',...
@@ -102,6 +102,9 @@ switch action
     mlrAdjustGUI(thisView,'set','axialRadioButton','fontSize',checkFontSize);
     mlrAdjustGUI(thisView,'set','coronalRadioButton','position',  [0.19    0.815   0.1    0.025]);
     mlrAdjustGUI(thisView,'set','coronalRadioButton','fontSize',checkFontSize);
+    mlrAdjustGUI(thisView,'add','control','displayGyrusSulcusBoundaryCheck','style','checkbox','value',0,...
+        'fontSize', checkFontSize,'visible','off','Callback',@displayGyrusSulcusBoundaryCheck_Callback,...
+        'String','Show Gyrus/Sulcus Boundaries','position',       [0.04   0.7    0.24   checkBoxHeight]);
 
     % change multiAxis control position and fontSize
     mlrAdjustGUI(thisView,'set','axisSingle','position',  [0.01    0.788   0.1    checkBoxHeight]);
@@ -205,7 +208,7 @@ switch action
     mlrAdjustGUI(thisView,'set','colorbar','position',            [0.35    0.105   0.58   0.08 ]);
     mlrAdjustGUI(thisView,'set','colorbar','fontSize',10);
     mlrAdjustGUI(thisView,'add','axes','colorbarRightBorder',...
-      'YaxisLocation','right','XTick',[],'box','off','position',  [0.929   0.105   0.001  0.08 ]);
+      'YaxisLocation','right','XTick',[],'box','off','color','none','position',  [0.929   0.105   0.001  0.08 ]);
     mlrAdjustGUI(thisView,'set','axis','position',                [0.285   0.195   0.71   0.8]);
     
 
@@ -220,10 +223,11 @@ switch action
     mlrAdjustGUI(thisView,'set','/Edit/Scan/Link Stimfile','separator','on');
     mlrAdjustGUI(thisView,'add','menu','Copy sform','/Edit/Base Anatomy/Transforms/','callback',@copyBaseSformCallBack,'tag','copyBaseSformMenuItem');
     mlrAdjustGUI(thisView,'add','menu','Paste sform','/Edit/Base Anatomy/Transforms/','callback',@pasteBaseSformCallBack,'tag','pasteBaseSformMenuItem');
-    mlrAdjustGUI(thisView,'set','editOverlayMenuItem','Callback',@editOverlayCallback);
-    mlrAdjustGUI(thisView,'set','/Edit/Overlay/Copy Overlay','Callback',@copyOverlayCallback);
-    mlrAdjustGUI(thisView,'set','/Edit/Overlay/Paste Overlay','Callback',@pasteOverlayCallback);
+    mlrAdjustGUI(thisView,'set','copyOverlayMenuItem','Callback',@copyOverlayCallback);
+    mlrAdjustGUI(thisView,'set','copyOverlayMenuItem','label','Copy overlay(s)...');
+    mlrAdjustGUI(thisView,'set','pasteOverlayMenuItem','Callback',@pasteOverlayCallback);
     mlrAdjustGUI(thisView,'set','copyScanMenuItem','Callback',@copyScanCallback);
+    mlrAdjustGUI(thisView,'set','copyScanMenuItem','label','Copy scan(s)...');
     mlrAdjustGUI(thisView,'set','pasteScanMenuItem','Callback',@pasteScanCallback);
 
     % Analysis menu
@@ -258,13 +262,15 @@ switch action
     mlrAdjustGUI(thisView,'add','menu','Single Voxels2','/ROI/Add/Contiguous Voxels','callback',@addSingleVoxelsCallBack,'label','Single Voxels','tag','addSingleVoxelsRoiMenuItem','accelerator','N');
     mlrAdjustGUI(thisView,'add','menu','Single Voxels3','/ROI/Subtract/Contiguous Voxels','callback',@removeSingleVoxelsCallBack,'label','Single Voxels','tag','removeSingleVoxelsRoiMenuItem','accelerator','U');
     mlrAdjustGUI(thisView,'add','menu','Transform','/ROI/Combine','callback',@transformROIsCallback,'label','Transform','tag','transformRoiMenuItem');
-
+    
+    %View menu
+    
     %Plot menu
     %add 3D render viewer
     mlrAdjustGUI(thisView,'add','menu','3D Viewer','flatViewerMenuItem','callback',@renderIn3D,'tag','viewIn3DMenuItem');
 
     
-    %---------------------------- Add colormaps and interrogators
+    %---------------------------- Add interrogators
   
     %get interrogators in the interrogatorFunctions directory
     interrogatorsFolder = [fileparts(which('GLM_v2Plugin')) '/interrogatorFunctions/'];
@@ -280,22 +286,7 @@ switch action
     else
       disp('(interrogatorFolderPlugin) No interrogator function found in folder');
     end
-    
-    %get colormaps in the colormapFunctions directory
-    colorMapsFolder = [fileparts(which('GLM_v2Plugin')) '/colormapFunctions/'];
-    colorMapFiles =  dir([colorMapsFolder '*.m']);
-    if ~isempty(colorMapFiles)
-      colorMapList = cell(1,length(colorMapFiles));
-      for iFile=1:length(colorMapFiles)
-         colorMapList{iFile} = stripext(colorMapFiles(iFile).name);
-      end
-      % install default colormaps
-      % that will show up when you do /Edit/Overlay
-      mlrAdjustGUI(thisView,'add','colormap',colorMapList);
-    else
-      disp('(colormapFolderPlugin) No colormap function found in folder');
-    end
-   
+       
     % return view
     retval = thisView;
   end
@@ -492,7 +483,7 @@ if viewGet(thisView,'basetype')
     case 'as displayed'
       sliceList = [];
     case 'one image per depth'
-      depthBin = 1/(viewGet(thisView,'corticaldepthBins')-1);
+      depthBin = 1/(mrGetPref('corticalDepthBins')-1);
       depth(1) = viewGet(thisView,'corticalmindepth');
       depth(2) = viewGet(thisView,'corticalmaxdepth');
       depth = sort(depth);
@@ -567,7 +558,7 @@ thisView = viewGet(getfield(guidata(hObject),'viewNum'),'view');
 if isfield(MLR,'clipboard') && isfield(MLR.clipboard,'tseries') && isfield(MLR.clipboard,'scanParams') 
   for iScan = 1:length(MLR.clipboard)
     if isscan(MLR.clipboard(iScan).scanParams)
-    	saveNewTSeries(thisView,MLR.clipboard(iScan).tseries,MLR.clipboard(iScan).scanParams,MLR.clipboard(iScan).scanParams.niftiHdr);
+    	thisView = saveNewTSeries(thisView,MLR.clipboard(iScan).tseries,MLR.clipboard(iScan).scanParams,MLR.clipboard(iScan).scanParams.niftiHdr);
     else
       mrWarnDlg(['(paste scan) Could not paste scan ' MLR.clipboard(iScan).tseries ' because its parameters are not valid'])
     end
@@ -606,13 +597,6 @@ else
     mrErrorDlg('(paste base sform) Cannot paste. Clipboard does not contain a valid transformation matrix. Use Edit -> Base Anatomy -> Transforms -> Copy sform.')
 end
 refreshMLRDisplay(viewNum);
-
-
-% --------------------------------------------------------------------
-function editOverlayCallback(hObject, dump)
-handles = guidata(hObject);
-viewNum = handles.viewNum;
-editOverlayGUI(viewNum);
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Analysis Menu Callbacks %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -715,3 +699,11 @@ function transformROIsCallback(hObject,dump)
 thisView = viewGet(getfield(guidata(hObject),'viewNum'),'view');
 transformROIs(thisView);
 
+
+%------------- displayGyrusSulcusBoundaryCheck_Callback Function --------------------------%
+function displayGyrusSulcusBoundaryCheck_Callback(hObject,dump)
+
+viewNum = getfield(guidata(hObject),'viewNum');
+thisView = viewGet(viewNum,'view');
+thisView = viewSet(thisView,'displayGyrusSulcusBoundary',get(hObject,'value'));
+refreshMLRDisplay(thisView.viewNum);

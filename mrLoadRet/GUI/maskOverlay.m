@@ -39,12 +39,19 @@ else
 end
 
 if ~ieNotDefined('boxInfo')
-  boxInfo.interpMethod = mrGetPref('interpMethod');
-  if isempty(boxInfo.interpMethod)
-    boxInfo.interpMethod = 'linear';
+  if fieldIsNotDefined(boxInfo,'interpMethod')
+    boxInfo.interpMethod = mrGetPref('interpMethod');
+    if isempty(boxInfo.interpMethod)
+      boxInfo.interpMethod = 'linear';
+    end
   end
-  boxInfo.interpExtrapVal = NaN;
+  if fieldIsNotDefined(boxInfo,'interpExtrapVal')
+    boxInfo.interpExtrapVal = NaN;
+  end
   overlayCoords = cell(1,length(scanList));
+  if fieldIsNotDefined(boxInfo,'corticalDepth') && ~fieldIsNotDefined(boxInfo,'baseNum')
+    boxInfo.corticalDepth = viewGet(thisView,'corticalDepth',boxInfo.baseNum);
+  end
 end
 
 cScan = 0;
@@ -138,10 +145,9 @@ interpFnctn = viewGet(thisView,'overlayInterpFunction',analysisNum);
 if ~isempty(base2overlay) & ~isempty(baseCoordsHomogeneous) 
   % Transform coordinates
   if size(baseCoordsHomogeneous,3)>1%if it is a flat map with more than one depth
-    corticalDepth = viewGet(thisView,'corticalDepth');
-    corticalDepthBins = viewGet(thisView,'corticalDepthBins');
+    corticalDepthBins = mrGetPref('corticalDepthBins');
     corticalDepths = 0:1/(corticalDepthBins-1):1;
-    slices = corticalDepths>=corticalDepth(1)-eps & corticalDepths<=corticalDepth(end)+eps; %here I added eps to account for round-off erros
+    slices = corticalDepths>=boxInfo.corticalDepth(1)-eps & corticalDepths<=boxInfo.corticalDepth(end)+eps; %here I added eps to account for round-off erros
     baseCoordsHomogeneous = baseCoordsHomogeneous(:,:,slices);
     nDepths = nnz(slices);
   else
@@ -176,10 +182,23 @@ else
     if iOverlay
       overlayData = viewGet(thisView,'overlayData',scanNum,iOverlay,analysisNum);
       if ~isempty(overlayData) & ~isempty(overlayCoords)
-        % Extract the slice
-        overlayImages(:,cOverlay) = interp3(overlayData,...
-          overlayCoords(:,2),overlayCoords(:,1),overlayCoords(:,3),...
-          interpMethod,interpExtrapVal);
+        % Extract the slice. 
+	if length(size(overlayData)) == 2
+	  % If this is a 2D overlay (i.e. base has only 2 dimensions) then use interp2
+	  if ~all(overlayCoords(:,3)==1)
+	    % put up a warning if the 3rd dimension is not 1
+	    disp(sprintf('(maskOverlay) This is a 2D image, but asked for coordinates have z that is not one'));
+	  end
+	  % interpolate in 2D to get overlay image (ignoring 3rd dimension)
+	  overlayImages(:,cOverlay) = interp2(overlayData,...
+					      overlayCoords(:,2),overlayCoords(:,1),...
+					      interpMethod,interpExtrapVal);
+	else
+	  % otherwise interpolate in 3D to get image
+	  overlayImages(:,cOverlay) = interp3(overlayData,...
+					      overlayCoords(:,2),overlayCoords(:,1),overlayCoords(:,3),...
+					      interpMethod,interpExtrapVal);
+	end
       else
         overlayImages(:,cOverlay) = NaN;
       end

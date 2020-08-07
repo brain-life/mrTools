@@ -65,7 +65,7 @@ switch lower(field)
     callbacks = viewGet(view,'callback','baseChange');
     % and call them
     for iCallback = 1:length(callbacks)
-      feval(callbacks{1},view);
+      view = feval(callbacks{iCallback},view);
     end
   end
  case {'labelrois'}
@@ -119,6 +119,9 @@ switch lower(field)
   % mlrGuiSet(view,'baseType',value);
   % value = 0 for regular or 1 for flat, 2 for surface
   if value == 0
+    set(handles.sliceText,'Visible','on');
+    set(handles.sliceSlider,'Visible','on');
+    set(handles.slice,'Visible','on');    
     set(handles.sagittalRadioButton,'Visible','on');
     set(handles.coronalRadioButton,'Visible','on');
     set(handles.axialRadioButton,'Visible','on');
@@ -137,6 +140,9 @@ switch lower(field)
       set(handles.linkMinMaxDepthCheck,'Visible','off');
     end
   elseif value >= 1
+    set(handles.sliceText,'Visible','off');
+    set(handles.sliceSlider,'Visible','off');
+    set(handles.slice,'Visible','off');    
     set(handles.sagittalRadioButton,'Visible','off');
     set(handles.coronalRadioButton,'Visible','off');
     set(handles.axialRadioButton,'Visible','off');
@@ -200,6 +206,14 @@ switch lower(field)
     end
     set(handles.rotateSlider,'SliderStep',[1 45]./360);
   end		  
+  if isfield(handles,'displayGyrusSulcusBoundaryCheck')
+    if value == 1
+      set(handles.displayGyrusSulcusBoundaryCheck,'Visible','on');
+    else
+      set(handles.displayGyrusSulcusBoundaryCheck,'Visible','off');
+    end
+  end
+  
  case {'basevolume'}
   % Choose the baseVolume
   set(handles.basePopup,'Value',value);
@@ -223,9 +237,16 @@ switch lower(field)
   
  case {'basetilt'}
   % mlrGuiSet(view,'baseMax',value);
+  value = clipToSlider(handles.baseTiltSlider,value,0,1);
   set(handles.baseTiltSlider,'Value',value);
-  set(handles.baseTiltText,'String',thisNum2str(value));
+  set(handles.baseTiltText,'String',num2str(value));
 
+ case {'displaygyrussulcusboundary'}
+  % mlrGuiSet(view,'displaygyrussulcusboundary',value);
+  if isfield(handles,'displayGyrusSulcusBoundaryCheck')
+    set(handles.displayGyrusSulcusBoundaryCheck,'value',value);
+  end
+  
  case {'analysispopup'}
   % mlrGuiSet(view,'analysisPopup',strings);
   set(handles.analysisPopup,'String',value);
@@ -263,6 +284,11 @@ switch lower(field)
 % %     end
   else
     set(handles.overlayPopup,'value',1);
+  end
+  % for matlab version 2014a and above, the listboxtop property is not
+  % correctly updated when setting the value or the strings
+  if ~verLessThan('matlab','8.3') && strcmp(get(handles.overlayPopup,'style'),'listbox')
+    set(handles.overlayPopup,'ListboxTop',1) %need to set it manually otherwise a warning will be issued
   end
   set(handles.overlayPopup,'String',value);
 
@@ -490,6 +516,13 @@ switch lower(field)
     colorbarPosition = get(handles.colorbar,'Position');
     colorbarPosition(3) = 1-colorbarPosition(1)-0.25-handles.marginSize;
     set(handles.colorbar,'Position',colorbarPosition);
+    if isfield(handles,'colorbarRightBorder')
+      widthBorder = 0.001;
+      borderPosition = colorbarPosition;
+      borderPosition(1) = borderPosition(1)+borderPosition(3)-widthBorder;
+      borderPosition(3) = widthBorder;
+      set(handles.colorbarRightBorder,'Position',borderPosition);
+    end
     refreshMLRDisplay(viewGet(view,'viewNum'));
     for iPanel = 1:length(MLR.panels)
       % if panel is visible, then shift panelY accordingly
@@ -538,13 +571,25 @@ switch lower(field)
     guidata(viewGet(view,'figNum'),handles);
     % make the colorbar display shorter
     colorbarPosition = get(handles.colorbar,'Position');
-    colorbarPosition(3) = 1-colorbarPosition(1)-handles.marginSize;
+    if ~isfield(handles,'colorbarRightBorder')
+      colorbarPosition(3) = 1-colorbarPosition(1)-handles.marginSize;
+    else
+      %if there is a right colorscale border, this means that multiple colorbar will be displayed 
+      %and we need a bit more space on the right for the scale value 
+      colorbarPosition(3) = 1-colorbarPosition(1)-0.05-handles.marginSize;
+      %now change the position of the right colorscale border
+      widthBorder = 0.001;
+      borderPosition = colorbarPosition;
+      borderPosition(1) = borderPosition(1)+borderPosition(3)-widthBorder;
+      borderPosition(3) = widthBorder;
+      set(handles.colorbarRightBorder,'Position',borderPosition);
+    end
     set(handles.colorbar,'Position',colorbarPosition);
     refreshMLRDisplay(viewGet(view,'viewNum'));
  case {'nscans'}
   % mlrGuiSet(view,'nscans',value);
   nScans = round(value);
-  curScan = round(get(handles.scanSlider,'Value'));
+  curScan = round(str2num(get(handles.scanText,'String')));
   if (nScans > 1)
     set(handles.scanSlider,'Min',1);
     set(handles.scanSlider,'Max',nScans);
@@ -554,15 +599,14 @@ switch lower(field)
   else
     set(handles.scanSlider,'Min',0.9);
     set(handles.scanSlider,'Max',1.1);
+    set(handles.scanSlider,'Value',1); %this wasn't needed until matlab ver 2014a, but now, visible[off] doesn't seem to work when 'value' is not within 'range' and therefore the slider is not rendered 
     set(handles.scanSlider,'Visible','off');
-    curScan = 1;
   end
   mlrGuiSet(view,'scan',curScan);
 
  case {'scan'}
   % mlrGuiSet(view,'scan',value);
-  value = clipToSlider(handles.scanSlider,value,1);
-  set(handles.scanSlider,'Value',value);
+  set(handles.scanSlider,'Value',clipToSlider(handles.scanSlider,value,1));
   set(handles.scanText,'String',num2str(value));
   % description
   description = viewGet(view,'description',value);
@@ -598,11 +642,11 @@ switch lower(field)
     set(handles.sliceSlider,'Value',value);
     set(handles.sliceText,'String',num2str(value));
   end
+  
  case {'slicetext'}
   % mlrGuiSet(view,'sliceText',value);
   handles.coords(handles.sliceOrientation) = value;
   set(handles.sliceText,'String',num2str(value));
-  view = viewSet(view,'curSlice',value);
 
  case {'corticaldepth'} %this sets a single cortical depth, whether there are one or two sliders
   % mlrGuiSet(view,'corticalDepth',value);
@@ -651,13 +695,13 @@ switch lower(field)
     set(handles.coronalRadioButton,'Value',0);
     set(handles.axialRadioButton,'Value',1);
   end
+  
  case {'rotate'}
   % mlrGuiSet(view,'rotate',value);
-  
-  value = clipToSlider(handles.rotateSlider,value);
+  value = clipToSlider(handles.rotateSlider,value,0,1);
   set(handles.rotateText,'String',num2str(value));
   set(handles.rotateSlider,'Value',value);
-  viewSet(view,'rotate',value);
+
  case {'viewnum'}
   % mlrGuiSet(view,'viewnum',value);
   handles.viewNum = value;
@@ -668,30 +712,41 @@ end
 guidata(MLR.views{viewNum}.figure,handles);
 
 
-function value = clipToSlider(slider,value,integerFlag)
+function value = clipToSlider(slider,value,integerFlag,loopFlag)
 % Clips value so that it doesn' texceed slider limits.
 % slider is a slider handle
 % value must be a number (otherwise, use current slider value)
 % integerFlag forces value to be an integer
+% loopFlag adds/subtracts the slider range so that the value
+% falls into the range (e.g. for rotate)
 if ieNotDefined('integerFlag')
   integerFlag = 0;
+end
+if ieNotDefined('loopFlag')
+  loopFlag = 0;
 end
 if ~isnumeric(value)
   value = get(slider,'Value');
 end
-if integerFlag
-  if (value < get(slider,'Min'))
-    value = ceil(get(slider,'Min'));
-  end
-  if (value > get(slider,'Max'))
-    value = floor(get(slider,'Max'));
-  end
+if loopFlag
+  modulo = (get(slider,'Max')-get(slider,'Min'));
+  %using complex unit circle to loop:
+  value = (angle(exp(1i*((value-get(slider,'Min'))/modulo*2*pi-pi)))+pi)/2/pi*modulo+get(slider,'Min'); 
 else
   if (value < get(slider,'Min'))
     value = get(slider,'Min');
   end
   if (value > get(slider,'Max'))
     value = get(slider,'Max');
+  end
+end
+if integerFlag
+  value = round(value);
+  if (value < get(slider,'Min'))
+    value = ceil(get(slider,'Min'));
+  elseif (value > get(slider,'Max'))
+    value = floor(get(slider,'Max'));
+  else
   end
 end
 

@@ -25,9 +25,11 @@ switch action
     % multiple surfaces at once.
     mlrAdjustGUI(v,'add','panel','Multiple base display',.5);
     % add the popup with the names of bases
-    mlrAdjustGUI(v,'add','control','multiBaseListbox','panel','Multiple base display','style','popupmenu','position', [0.01    0.92    0.98   0.07 ],'Callback',@multiBaseListboxSelect);
+    mlrAdjustGUI(v,'add','control','multiBaseListbox','panel','Multiple base display','style','popupmenu','position', [0.01    0.92    0.98   0.07 ],'Callback',@multiBaseListboxSelect,'String',{'empty'},'Value',1);
     % add checkbox for multi base viewing
-    mlrAdjustGUI(v,'add','control','multiBaseCheckbox','panel','Multiple base display','style','checkbox','position', [0.01    0.84    0.98   0.07 ],'String','MultiDisplay','Callback',@multiBaseCheckbox);
+    mlrAdjustGUI(v,'add','control','multiBaseCheckbox','panel','Multiple base display','style','checkbox','position', [0.01    0.84    0.48   0.07 ],'String','MultiDisplay','Callback',{@multiBaseCheckbox,'base'});
+    % add checkbox for multi base contour viewing
+    mlrAdjustGUI(v,'add','control','multiBaseContoursCheckbox','panel','Multiple base display','style','checkbox','position', [0.51    0.84    0.48   0.07 ],'String','Contours','Callback',{@multiBaseCheckbox,'contours'});
     % add slider for alpha
     mlrAdjustGUI(v,'add','control','multiBaseAlphaText','panel','Multiple base display','style','text','position', [0.01    0.76    0.2   0.07 ],'String','Alpha');
     mlrAdjustGUI(v,'add','control','multiBaseAlphaSlider','panel','Multiple base display','style','slider','position', [0.22    0.76    0.57   0.07 ],'String','Alpha','SliderStep',[0.1 0.25],'Callback',@multiBaseAlpha);
@@ -43,34 +45,35 @@ switch action
     mlrAdjustGUI(v,'add','control','multiBaseOverlayAlphaEdit','panel','Multiple base display','style','edit','position', [0.8    0.6    0.19   0.07 ],'Callback',@multiBaseOverlayAlpha);
 
     % add controls for fascicles
-    mlrAdjustGUI(v,'add','control','mlrAnatomyFascicleIntersect','panel','Multiple base display','style','pushbutton','position', [0.01    0.52    0.98   0.07 ],'String','Calculate intersect','Callback',@mlrAnatomyFascicleIntersect);
-    mlrAdjustGUI(v,'add','control','mlrAnatomyFascicleN','panel','Multiple base display','style','text','position', [0.01    0.44    0.98   0.07 ],'HorizontalAlignment','Center');
-    mlrAdjustGUI(v,'add','control','mlrAnatomyFascicleDisplay','panel','Multiple base display','style','popupmenu','position', [0.01    0.36    0.98   0.07 ],'HorizontalAlignment','Center','Callback',@mlrAnatomyFascicleDisplay);
-    mlrAdjustGUI(v,'add','control','mlrAnatomyFascicleRestrict','panel','Multiple base display','style','popupmenu','position', [0.01    0.28    0.98   0.07 ],'HorizontalAlignment','Center','Callback',@mlrAnatomyFascicleRestrict);
-    mlrAdjustGUI(v,'add','control','mlrAnatomyFascicleMinText','panel','Multiple base display','style','text','position', [0.01    0.20    0.1   0.07 ],'HorizontalAlignment','Center','String','Min');
-    mlrAdjustGUI(v,'add','control','mlrAnatomyFascicleMinSlider','panel','Multiple base display','style','slider','position', [0.11    0.20    0.25   0.07 ],'HorizontalAlignment','Center','Callback',@mlrAnatomyFascicleMinmax);
-    mlrAdjustGUI(v,'add','control','mlrAnatomyFascicleMinEdit','panel','Multiple base display','style','edit','position', [0.37    0.20    0.12   0.07 ],'HorizontalAlignment','Center','Callback',@mlrAnatomyFascicleMinmax);
-    mlrAdjustGUI(v,'add','control','mlrAnatomyFascicleMaxText','panel','Multiple base display','style','text','position', [0.5    0.20    0.1   0.07 ],'HorizontalAlignment','Center','String','Max');
-    mlrAdjustGUI(v,'add','control','mlrAnatomyFascicleMaxSlider','panel','Multiple base display','style','slider','position', [0.61    0.20    0.25   0.07 ],'HorizontalAlignment','Center','Callback',@mlrAnatomyFascicleMinmax);
-    mlrAdjustGUI(v,'add','control','mlrAnatomyFascicleMaxEdit','panel','Multiple base display','style','edit','position', [0.87    0.20    0.12   0.07 ],'HorizontalAlignment','Center','Callback',@mlrAnatomyFascicleMinmax);
+    mlrAdjustGUI(v,'add','control','mlrAnatomyFascicleIntersect','panel','Multiple base display','style','pushbutton','position', [0.01    0.52    0.98   0.07 ],'String','Calculate intersect','Callback',@mlrAnatomyFascicleIntersect,'Visible','off');
+    mlrAdjustGUI(v,'add','control','mlrAnatomyFascicleN','panel','Multiple base display','style','text','position', [0.01    0.44    0.98   0.07 ],'HorizontalAlignment','Center','Visible','off');
+    mlrAdjustGUI(v,'add','control','mlrAnatomyFascicleDisplayText','panel','Multiple base display','style','text','position', [0.01    0.36    0.33   0.07 ],'HorizontalAlignment','Center','Visible','off','String','Restrict with');
+    mlrAdjustGUI(v,'add','control','mlrAnatomyFascicleDisplay','panel','Multiple base display','style','popupmenu','position', [0.35   0.36    0.64   0.07 ],'HorizontalAlignment','Center','Callback',@mlrAnatomyFascicleDisplay,'Visible','off');
+    mlrAdjustGUI(v,'add','control','mlrAnatomyFascicleRestrictText','panel','Multiple base display','style','text','position', [0.01    0.28    0.33   0.07 ],'HorizontalAlignment','Center','Visible','off','String','Restrict type');
+    mlrAdjustGUI(v,'add','control','mlrAnatomyFascicleRestrict','panel','Multiple base display','style','popupmenu','position', [0.35    0.28    0.64   0.07 ],'HorizontalAlignment','Center','Callback',@mlrAnatomyFascicleRestrict,'Visible','off');
+    mlrAdjustGUI(v,'add','control','mlrAnatomyFascicleMinText','panel','Multiple base display','style','text','position', [0.01    0.20    0.1   0.07 ],'HorizontalAlignment','Center','String','Min','Visible','off');
+    mlrAdjustGUI(v,'add','control','mlrAnatomyFascicleMinSlider','panel','Multiple base display','style','slider','position', [0.11    0.20    0.25   0.07 ],'HorizontalAlignment','Center','Callback',@mlrAnatomyFascicleMinmax,'Visible','off');
+    mlrAdjustGUI(v,'add','control','mlrAnatomyFascicleMinEdit','panel','Multiple base display','style','edit','position', [0.37    0.20    0.12   0.07 ],'HorizontalAlignment','Center','Callback',@mlrAnatomyFascicleMinmax,'Visible','off');
+    mlrAdjustGUI(v,'add','control','mlrAnatomyFascicleMaxText','panel','Multiple base display','style','text','position', [0.5    0.20    0.1   0.07 ],'HorizontalAlignment','Center','String','Max','Visible','off');
+    mlrAdjustGUI(v,'add','control','mlrAnatomyFascicleMaxSlider','panel','Multiple base display','style','slider','position', [0.61    0.20    0.25   0.07 ],'HorizontalAlignment','Center','Callback',@mlrAnatomyFascicleMinmax,'Visible','off');
+    mlrAdjustGUI(v,'add','control','mlrAnatomyFascicleMaxEdit','panel','Multiple base display','style','edit','position', [0.87    0.20    0.12   0.07 ],'HorizontalAlignment','Center','Callback',@mlrAnatomyFascicleMinmax,'Visible','off');
 
     
     % add plane rotation
-    mlrAdjustGUI(v,'add','control','mlrAnatomyRotateAroundText','panel','Multiple base display','style','text','position', [0.01    0.48    0.2   0.07 ],'String','Rotate around');
-    mlrAdjustGUI(v,'add','control','mlrAnatomyRotateAroundX','panel','Multiple base display','style','radio','position', [0.22    0.52    0.15   0.07 ],'String','X','Callback',@mlrAnatomyRotateAround);
-    mlrAdjustGUI(v,'add','control','mlrAnatomyRotateAroundY','panel','Multiple base display','style','radio','position', [0.42    0.52    0.15   0.07 ],'String','Y','Callback',@mlrAnatomyRotateAround);
-    mlrAdjustGUI(v,'add','control','mlrAnatomyRotateAroundZ','panel','Multiple base display','style','radio','position', [0.62    0.52    0.15   0.07 ],'String','Z','Callback',@mlrAnatomyRotateAround);
-    mlrAdjustGUI(v,'add','control','mlrAnatomyRotateAroundSlider','panel','Multiple base display','style','slider','position', [0.22    0.44    0.57   0.07 ],'String','Rotate','SliderStep',[1 15]/360,'Callback',@mlrAnatomyRotateAround,'Max',360,'Min',0);
-    mlrAdjustGUI(v,'add','control','mlrAnatomyRotateAroundEdit','panel','Multiple base display','style','edit','position', [0.8    0.44    0.19   0.07 ],'Callback',@mlrAnatomyRotateAround);
+    mlrAdjustGUI(v,'add','control','mlrAnatomyRotateAroundText','panel','Multiple base display','style','text','position', [0.01    0.48    0.2   0.07 ],'String','Rotate around','Visible','off');
+    mlrAdjustGUI(v,'add','control','mlrAnatomyRotateAroundX','panel','Multiple base display','style','radio','position', [0.22    0.52    0.15   0.07 ],'String','X','Callback',@mlrAnatomyRotateAround,'Visible','off');
+    mlrAdjustGUI(v,'add','control','mlrAnatomyRotateAroundY','panel','Multiple base display','style','radio','position', [0.42    0.52    0.15   0.07 ],'String','Y','Callback',@mlrAnatomyRotateAround,'Visible','off');
+    mlrAdjustGUI(v,'add','control','mlrAnatomyRotateAroundZ','panel','Multiple base display','style','radio','position', [0.62    0.52    0.15   0.07 ],'String','Z','Callback',@mlrAnatomyRotateAround,'Visible','off');
+    mlrAdjustGUI(v,'add','control','mlrAnatomyRotateAroundSlider','panel','Multiple base display','style','slider','position', [0.22    0.44    0.57   0.07 ],'String','Rotate','SliderStep',[1 15]/360,'Callback',@mlrAnatomyRotateAround,'Max',360,'Min',0,'Visible','off');
+    mlrAdjustGUI(v,'add','control','mlrAnatomyRotateAroundEdit','panel','Multiple base display','style','edit','position', [0.8    0.44    0.19   0.07 ],'Callback',@mlrAnatomyRotateAround,'Visible','off');
 
     % add plane center position
-    mlrAdjustGUI(v,'add','control','mlrAnatomyCenterText','panel','Multiple base display','style','text','position', [0.01    0.3    0.2   0.07 ],'String','Center');
-    mlrAdjustGUI(v,'add','control','mlrAnatomyCenterX','panel','Multiple base display','style','radio','position', [0.22    0.36    0.15   0.07 ],'String','X','Callback',@mlrAnatomyCenter);
-    mlrAdjustGUI(v,'add','control','mlrAnatomyCenterY','panel','Multiple base display','style','radio','position', [0.42    0.36    0.15   0.07 ],'String','Y','Callback',@mlrAnatomyCenter);
-    mlrAdjustGUI(v,'add','control','mlrAnatomyCenterZ','panel','Multiple base display','style','radio','position', [0.62    0.36    0.15   0.07 ],'String','Z','Callback',@mlrAnatomyCenter);
-    mlrAdjustGUI(v,'add','control','mlrAnatomyCenterSlider','panel','Multiple base display','style','slider','position', [0.22    0.28    0.57   0.07 ],'String','Rotate','SliderStep',[1 10]/200,'Callback',@mlrAnatomyCenter,'Max',100,'Min',-100);
-    mlrAdjustGUI(v,'add','control','mlrAnatomyCenterEdit','panel','Multiple base display','style','edit','position', [0.8    0.28    0.19   0.07 ],'Callback',@mlrAnatomyCenter);
-
+    mlrAdjustGUI(v,'add','control','mlrAnatomyCenterText','panel','Multiple base display','style','text','position', [0.01    0.3    0.2   0.07 ],'String','Center','Visible','off');
+    mlrAdjustGUI(v,'add','control','mlrAnatomyCenterX','panel','Multiple base display','style','radio','position', [0.22    0.36    0.15   0.07 ],'String','X','Callback',@mlrAnatomyCenter,'Visible','off');
+    mlrAdjustGUI(v,'add','control','mlrAnatomyCenterY','panel','Multiple base display','style','radio','position', [0.42    0.36    0.15   0.07 ],'String','Y','Callback',@mlrAnatomyCenter,'Visible','off');
+    mlrAdjustGUI(v,'add','control','mlrAnatomyCenterZ','panel','Multiple base display','style','radio','position', [0.62    0.36    0.15   0.07 ],'String','Z','Callback',@mlrAnatomyCenter,'Visible','off');
+    mlrAdjustGUI(v,'add','control','mlrAnatomyCenterSlider','panel','Multiple base display','style','slider','position', [0.22    0.28    0.57   0.07 ],'String','Rotate','SliderStep',[1 10]/200,'Callback',@mlrAnatomyCenter,'Max',100,'Min',-100,'Visible','off');
+    mlrAdjustGUI(v,'add','control','mlrAnatomyCenterEdit','panel','Multiple base display','style','edit','position', [0.8    0.28    0.19   0.07 ],'Callback',@mlrAnatomyCenter,'Visible','off');
     % ROI controls
     %mlrAdjustGUI(v,'add','control','roiBaseListBox','panel','Multiple base display','style','listbox','position', [0.02    0.1    0.96   0.38 ],'Callback',@roiListboxSelect,'Max',2);
 
@@ -91,8 +94,12 @@ switch action
    end
  % return a help string
  case {'help','h','?'}
-   retval = 'This is an example plugin, it just installs a menu item to Select Plugins.';
- otherwise
+   retval = ['The mlrAnatomy plugin adds the following base anatomy display features:',...
+             '     - Multiple base display (e.g. surface overlayd on 3D view of volume slices)',...
+             '     - 3D Fascicle display',...
+             '     - reslicing of volumes in any plane',...
+             '     - display of surface intersection with volume slice'];
+ otherwise 
    disp(sprintf('(mlrAnatomyPlugin) Unknown command %s',action));
 end
 
@@ -194,6 +201,8 @@ if ~isempty(selectedVal) && (selectedVal>0) && (selectedVal <= length(baseNames)
     mlrAdjustGUI(v,'set','mlrAnatomyFascicleN','Visible','off');
     mlrAdjustGUI(v,'set','mlrAnatomyFascicleDisplay','Visible','off');
     mlrAdjustGUI(v,'set','mlrAnatomyFascicleRestrict','Visible','off');
+    mlrAdjustGUI(v,'set','mlrAnatomyFascicleDisplayText','Visible','off');
+    mlrAdjustGUI(v,'set','mlrAnatomyFascicleRestrictText','Visible','off');
     mlrAdjustGUI(v,'set','mlrAnatomyFascicleMinText','Visible','off');
     mlrAdjustGUI(v,'set','mlrAnatomyFascicleMinSlider','Visible','off');
     mlrAdjustGUI(v,'set','mlrAnatomyFascicleMinEdit','Visible','off');
@@ -205,7 +214,7 @@ if ~isempty(selectedVal) && (selectedVal>0) && (selectedVal <= length(baseNames)
     displayList = {'Fascicle'};
     if isfield(base.fascicles,'intersect')
       for i = 1:length(base.fascicles.intersect)
-	displayList{end+1} = base.fascicles.intersect.intersectWith;
+	displayList{end+1} = base.fascicles.intersect(i).intersectWith;
       end
     end
     mlrAdjustGUI(v,'set','mlrAnatomyFascicleDisplay','String',displayList);
@@ -217,6 +226,8 @@ if ~isempty(selectedVal) && (selectedVal>0) && (selectedVal <= length(baseNames)
     mlrAdjustGUI(v,'set','mlrAnatomyFascicleN','Visible','on');
     mlrAdjustGUI(v,'set','mlrAnatomyFascicleDisplay','Visible','on');
     mlrAdjustGUI(v,'set','mlrAnatomyFascicleRestrict','Visible','on');
+    mlrAdjustGUI(v,'set','mlrAnatomyFascicleDisplayText','Visible','on');
+    mlrAdjustGUI(v,'set','mlrAnatomyFascicleRestrictText','Visible','on');
     mlrAdjustGUI(v,'set','mlrAnatomyFascicleMinText','Visible','on');
     mlrAdjustGUI(v,'set','mlrAnatomyFascicleMinSlider','Visible','on');
     mlrAdjustGUI(v,'set','mlrAnatomyFascicleMaxText','Visible','on');
@@ -270,6 +281,7 @@ end
   
   % set the various properties
   mlrAdjustGUI(v,'set','multiBaseCheckbox','Value',base.multiDisplay);
+  mlrAdjustGUI(v,'set','multiBaseContoursCheckbox','Value',base.multiDisplayContours);
   % set alpha
   if isempty(base.alpha) alpha = 1;else alpha = base.alpha;end
   mlrAdjustGUI(v,'set','multiBaseAlphaSlider','Value',alpha);
@@ -310,7 +322,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
 %    multiBaseCheckbox    %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
-function multiBaseCheckbox(hObject,eventdata)
+function multiBaseCheckbox(hObject,eventdata,option)
 
 % get view
 v = viewGet(getfield(guidata(hObject),'viewNum'),'view');
@@ -324,9 +336,15 @@ selectedVal = get(multiBaseListbox,'Value');
 if ~isempty(selectedVal) && (selectedVal>0) && (selectedVal <= length(baseNames))
   % get base num
   baseNum = viewGet(v,'baseNum',baseNames{selectedVal});
-
-  % set the base multiBase
-  v = viewSet(v,'baseMultiDisplay',get(hObject,'Value'),baseNum);
+  
+  switch(option)
+    case 'base'
+      % set the base multiBase
+      v = viewSet(v,'baseMultiDisplay',get(hObject,'Value'),baseNum);
+    case 'contours'
+      % set the base multiDisplayContours
+      v = viewSet(v,'baseMultiDisplayContours',get(hObject,'Value'),baseNum);
+  end
 
   % redisplay
   refreshMLRDisplay(v);
@@ -825,11 +843,21 @@ if ~isempty(selectedVal) && (selectedVal>=1) && (selectedVal<=length(baseSurface
 end
 
 % just get ones that have fascicles
-fascicles = {};
+fascicles = {};intersectSurfaces = {};roiSurfaces = {};corticalDepth = {};
 for iBase = 1:length(baseSurfaces)
   b = viewGet(v,'base',viewGet(v,'baseNum',baseSurfaces{iBase}));
   if ~isempty(b.fascicles)
     fascicles{end+1} = baseSurfaces{iBase};
+  else
+    intersectSurfaces{end+1} = baseSurfaces{iBase};
+    roiSurfaces{end+1} = {'N/A'};
+    % check if plane
+    if isfield(b,'plane') && ~isempty(b.plane)
+      % planes do not have cortical depth
+      corticalDepth{end+1} = nan;
+    else
+      corticalDepth{end+1} = 0;
+    end
   end
 end
 if isempty(fascicles)
@@ -837,50 +865,87 @@ if isempty(fascicles)
   return
 end
 
+% add list of rois to possible surface to compute intersection with
+nonFascicleSurfaces = intersectSurfaces;
+for iROI = 1:viewGet(v,'numROIs')
+  intersectSurfaces{end+1} = viewGet(v,'roiName',iROI);
+  % get what base this was created on
+  createdOnBase = viewGet(v,'roiCreatedOnBase',iROI);
+  if ismember(createdOnBase,nonFascicleSurfaces)
+    % if we have that base then make that the first choice
+    roiSurfaces{end+1} = putOnTopOfList(createdOnBase,nonFascicleSurfaces);
+  else
+    % otherwise just show possible choices
+    roiSurfaces{end+1} = nonFascicleSurfaces;
+  end
+  % default cortical depth to white matter boundary
+  corticalDepth{end+1} = 0;
+end
+
 % make combine dialog
 paramsInfo = {};
 paramsInfo{end+1} = {'fascicle',fascicles,'Fascicle base to compute intersection on. That is, this is the one whose fascicles will change dependent on what action we take below'};
-paramsInfo{end+1} = {'intersectSurface',baseSurfaces,'Fascicle base to check intersection with.'};
-paramsInfo{end+1} = {'intersectionType',{'intersect','does not intersect'},'Choose what type of intersection to check'};
+paramsInfo{end+1} = {'intersectWith',1,'round=1','incdec=[-1 1]',sprintf('minmax=[1 %i]',length(intersectSurfaces)),'Base or ROI to calculate intersection with.'};
+paramsInfo{end+1} = {'intersectSurface',intersectSurfaces,'Fascicle base to check intersection with.','type=string','editable=0','contingent=intersectWith'};
+paramsInfo{end+1} = {'roiSurface',roiSurfaces,'If intersectSurface above is an ROI this will be a surface to use for the conversion. ROIs are lists of coordinates and to do these intersections we convert to a surface. To convert to a surface you need to have a surface structure to base that on, so choose here the surface that you want to use for that. It can be any surface for which the ROI shows up on.','type=popupmenu','contingent=intersectWith'};
+paramsInfo{end+1} = {'corticalDepth',corticalDepth,'At what cortical depth to compute intersection statistics. 0 is lower and 1 is upper surface of gray matter. To extend into the white matter, set this value negative. Values are relative to the depth of cortex - so a value of -0.5 is half the gray matter depth into the white matter. For some surfaces like planes this value is not used and defaults to Nan','type=numeric','incdec=[-0.1 0.1]','contingent=intersectWith'};
 paramsInfo{end+1} = {'doIntersection',0,'type=pushbutton','buttonString=Do intersection','Press to do the intersection','callback',@mlrAnatomyPluginDoFascicleIntersect,'callbackArg',v,'passParams=1'};
 
 % put up dialog
-params = mrParamsDialog(paramsInfo,'Fascicle intersection tool');
+params = mrParamsDialog(paramsInfo,'Fascicle intersection tool','fullWidth=1');
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %    mlrAnatomyPluginDoFasicleIntersect    %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function params = mlrAnatomyPluginDoFascicleIntersect(v,params)
 
+disp(sprintf('(mlrAnatomyPlugin) Computing fascicle intersection...'));
+
 % get the base we are going to modify
 baseNum = viewGet(v,'baseNum',params.fascicle);
 b = viewGet(v,'base',baseNum);
 f = b.fascicles;
 
-% get intersection surface
-intersectBaseNum = viewGet(v,'baseNum',params.intersectSurface);
-intersect = viewGet(v,'baseSurface',intersectBaseNum);
+% see if the intersect is with a ROI
+roiNum = viewGet(v,'roiNum',params.intersectSurface);
+if ~isempty(roiNum)
+  % turn roi into a surface
+  intersectBaseNum = viewGet(v,'baseNum',params.roiSurface);
+  roiSurface = viewGet(v,'base',intersectBaseNum);
+  intersect = mlrROI2surf(viewGet(v,'roi',roiNum),roiSurface,'corticalDepth',params.corticalDepth);
+  % swapXY to make same as what baseSurface returns
+  vtcs(:,1) = intersect.vtcs(:,2);
+  vtcs(:,2) = intersect.vtcs(:,1);
+  vtcs(:,3) = intersect.vtcs(:,3);
+  intersect.vtcs = vtcs;
+else
+  % get intersection surface
+  intersectBaseNum = viewGet(v,'baseNum',params.intersectSurface);
+  % get a surface at the right cortical depth
+  if ~isnan(params.corticalDepth)
+    intersect = viewGet(v,'baseSurface',intersectBaseNum,params.corticalDepth);
+  else
+    intersect = viewGet(v,'baseSurface',intersectBaseNum);
+  end
+end
 
 % get xform from intersection base to fascicles
 base2base = viewGet(v,'base2base',baseNum,intersectBaseNum);
 swapXY = [0 1 0 0;1 0 0 0;0 0 1 0;0 0 0 1];
-
+%base2base = eye(4);
+% initialize distance
 d = -inf(1,f.n);
 
-% get vertices of intersection surface
+% get vertices of intersection surface and convert coordinates
 v2 = intersect.vtcs;
 v2(:,4) = 1;
 v2 = swapXY*base2base*swapXY*v2';
 v2 = v2(1:3,:)';
 v2n = size(v2,1);
 
-%surf1 = f.patches{1};
-%surf2.vertices = v2;
-%surf2.faces = intersect.tris;
-%mlrSmartfig('mlrAnatomyPluginHuh','reuse');clf;
-%patch('vertices',surf1.vertices,'faces',surf1.faces);
-%hold on
-%patch('vertices',surf2.vertices,'faces',surf2.faces);
+% make the intersection Surface
+intersectSurface.vertices = v2;
+intersectSurface.faces = intersect.tris;
 
 % start up workers
 n = mlrNumWorkers;
@@ -999,7 +1064,7 @@ if isequal(displayType,'Fascicle')
   mlrAdjustGUI(v,'set','mlrAnatomyFascicleMaxEdit','Visible','on');
 else
   % otherwise we are doing an intersect, so figure out which intersect we are doing
-  intersectNum = find(strcmp(displayType,b.fascicles.intersect(:).intersectWith));
+  intersectNum = find(strcmp(displayType,{b.fascicles.intersect(:).intersectWith}));
   if isempty(intersectNum),return,end
   intersect = b.fascicles.intersect(intersectNum);
   % get what we can restrict against and set up controls
@@ -1041,7 +1106,7 @@ if isequal(displayType,'Fascicle')
   mlrAnatomyFascicleRestrictFascicle(v,hObject,b,baseNum);
 else
   % we are doing an intersect, so figure out which intersect we are doing
-  intersectNum = find(strcmp(displayType,b.fascicles.intersect(:).intersectWith));
+  intersectNum = find(strcmp(displayType,{b.fascicles.intersect(:).intersectWith}));
   if isempty(intersectNum),return,end
   intersect = b.fascicles.intersect(intersectNum);
   % call function to do restriction with intersect
@@ -1113,7 +1178,7 @@ if val > 2
   % set base to display just the one fascicle
   dispList = zeros(1,b.fascicles.n);
   dispList(val)=1;
-  b = mlrAnatomySetFascicles(b,dispList);
+  b = mlrAnatomySetFascicles(v,b,dispList);
   b.fascicles.displayMin = val;
   b.fascicles.displayMax = val;
 elseif val == 1
@@ -1125,7 +1190,7 @@ elseif val == 1
 
   % set base to display all fascicles
   dispList = ones(1,b.fascicles.n);
-  b = mlrAnatomySetFascicles(b,dispList);
+  b = mlrAnatomySetFascicles(v,b,dispList);
   b.fascicles.displayMin = 1;
   b.fascicles.displayMax = b.fascicles.n;
 elseif val == 2
@@ -1136,7 +1201,7 @@ elseif val == 2
     mlrAdjustGUI(v,'set','mlrAnatomyFascicleMinEdit','String',sprintf('%i',b.fascicles.subsetList(1)));
     mlrAdjustGUI(v,'set','mlrAnatomyFascicleMaxSlider','Value',b.fascicles.subsetList(2));
     mlrAdjustGUI(v,'set','mlrAnatomyFascicleMaxEdit','String',sprintf('%i',b.fascicles.subsetList(2)));
-    mlrAnatomyFascicleMinmax(mlrAdjustGUI(v,'get','mlrAnatomyFascicleMinSlider'),eventdata);
+    mlrAnatomyFascicleMinmax(mlrAdjustGUI(v,'get','mlrAnatomyFascicleMinSlider'),[]);
   end
 end
 
@@ -1168,7 +1233,7 @@ if isequal(displayType,'Fascicles')
 else
   doRound = false;
 end
-  
+
 % get selected base  
 [b baseNum] = mlrAnatomyGetSelectedBase(v);
 
@@ -1197,6 +1262,9 @@ elseif isequal(hMinEdit,hObject)
     if val < 1, val = 1;end
     if val > b.fascicles.n,val = b.fascicles.n;end
   end
+  % keep in bounds
+  val = min(val,get(hMinSlider,'Max'));
+  val = max(val,get(hMinSlider,'Min'));
   % now set slider to that value
   set(hMinSlider,'Value',val);
   set(hMinEdit,'String',sprintf('%s',mlrnum2str(val)));
@@ -1215,6 +1283,9 @@ elseif isequal(hMaxEdit,hObject)
     if val < 1, val = 1;end
     if val > b.fascicles.n,val = b.fascicles.n;end
   end
+  % keep in bounds
+  val = min(val,get(hMaxSlider,'Max'));
+  val = max(val,get(hMaxSlider,'Min'));
   % now set slider to that value
   set(hMaxSlider,'Value',val);
   set(hMaxEdit,'String',sprintf('%s',mlrnum2str(val)));
@@ -1247,7 +1318,7 @@ if isequal(displayType,'Fascicle')
 
 else
   % get which intersect we are doing
-  intersectNum = find(strcmp(displayType,b.fascicles.intersect(:).intersectWith));
+  intersectNum = find(strcmp(displayType,{b.fascicles.intersect(:).intersectWith}));
   if isempty(intersectNum),return,end
   intersect = b.fascicles.intersect(intersectNum);
   % now get min and max values
@@ -1265,7 +1336,7 @@ else
 end
 
 % now set them and display
-b = mlrAnatomySetFascicles(b,dispList);
+b = mlrAnatomySetFascicles(v,b,dispList);
 
 % reset the base and cache
 v = viewSet(v,'base',b,baseNum);
@@ -1279,7 +1350,7 @@ refreshMLRDisplay(v);
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %    mlrAnatomySetFascicles    %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function b = mlrAnatomySetFascicles(b,dispList)
+function b = mlrAnatomySetFascicles(v,b,dispList)
 
 % shortcut to fascicles
 f = b.fascicles;
@@ -1328,6 +1399,9 @@ b.coordMap.outerVtcs = b.coordMap.innerVtcs;
 
 % make sure it is still a base
 [tf b] = isbase(b);
+
+% set display of how many fascicles are being shown
+mlrAdjustGUI(v,'set','mlrAnatomyFascicleN','String',sprintf('N=%i/%i',sum(dispList),b.fascicles.n));
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %    mlrAnatomyGetSelectedBase    %

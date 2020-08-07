@@ -22,9 +22,9 @@ function [view anatFilePath] = loadAnat(view,anatFileName,anatFilePath)
 %%%%%%%%%%%%%%%%%%%%%%%%%
 
 if nargin == 0,help loadAnat,return,end
-  
+
 if ieNotDefined('anatFilePath')
-    anatFilePath = ''; 
+    anatFilePath = '';
 end
 
 % Open dialog box to have user choose the file
@@ -86,6 +86,12 @@ for pathNum = 1:length(pathStr)
   % so this check seems to work
   volumeDimension = sum((hdr.dim(2:end)~=1)&(hdr.dim(2:end)~=0));
 
+  % check for 4D file in which there are no slices (i.e. an X x Y x 1 x N volume)
+  if (hdr.dim(1) == 4) & (hdr.dim(4) == 1) & (hdr.dim(5) ~= 1)
+    % this should also be treated as 4D
+    volumeDimension = 4;
+  end
+  
   % Error if it dimension is greater than 4D.
   if (volumeDimension > 4)
     mrErrorDlg(['(loadAnat) Volume must be 3D or 4D. This file contains a ',num2str(volumeDimension),'D array.']);
@@ -120,18 +126,18 @@ for pathNum = 1:length(pathStr)
   % won't have correct info, but will allow the rest of the
   % code to run and can be fixed by a correct alignment
   if isempty(hdr.qform)
-    mrWarnDlg(sprinf('(loadAnat) !!!! Missing qform, making one based only on voxel dimensiosn !!!!'));
+    mrWarnDlg(sprintf('(loadAnat) !!!! Missing qform, making one based only on voxel dimensiosn !!!!'));
     hdr.qform = diag(hdr.pixdim);
     hdr.qform(4,4) = 1;
   end
-  
+
   % now check for an assoicated .mat file, this is created by
   % mrLoadRet and contains parameters for the base anatomy.
   % (it is the base structure minus the data and hdr) This is
   % essential for flat files
   base = [];
   matFilename = sprintf('%s.mat',stripext(pathStr{pathNum}));
-  if isfile(matFilename)
+  if mlrIsFile(matFilename)
     l = load(matFilename);
     if isfield(l,'base')
       base = l.base;
@@ -158,14 +164,10 @@ for pathNum = 1:length(pathStr)
     if ~isfield(base,'rotate') || isempty(base.rotate)
       base.rotate = 90;
     end
-    if ~isfield(base,'curSlice') || isempty(base.curSlice)
-      sliceOrientation = viewGet(view,'sliceOrientation');
-      if ~isempty(sliceOrientation) && any(sliceOrientation == [1 2 3])
+    if ~isfield(base,'curCoords') || isempty(base.curCoords)
 	% set current slice to the slice half way through the volume
 	voldim = size(vol);
-	base.curSlice = max(1,floor(voldim(sliceOrientation)/2));
-	base.curCoords = round(voldim/2);
-      end
+	base.curCoords = ceil(voldim/2);
     end
   else
     % get the nifti header from the mlrImage header
@@ -189,7 +191,7 @@ for pathNum = 1:length(pathStr)
   base.data = vol;
   base.hdr = hdr;
   base.permutationMatrix = permutationMatrix;
-  
+
   % Add it to the list of base volumes and select it
   view = viewSet(view,'newBase',base);
 end

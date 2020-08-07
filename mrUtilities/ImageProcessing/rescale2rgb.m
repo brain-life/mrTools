@@ -21,11 +21,17 @@ end
 
 if ~exist('clip','var')
   % Choose clipping based on histogram
-  histThresh = length(image(:))/1000;
-  [cnt, val] = hist(image(:),100);
+  histThresh = length(image(~isnan(image)))/1000;
+  [cnt, val] = hist(image(~isnan(image)),100);
   goodVals = find(cnt>histThresh);
   clipMin = val(min(goodVals));
   clipMax = val(max(goodVals));
+  %if that doesn't work, take the 5th and 95th percentiles
+  if clipMin==clipMax
+    im = sort(image(~isnan(image)));
+    clipMin = im(round(0.05*length(im)));
+    clipMax = im(round(0.95*length(im)));
+  end
   clip = [clipMin,clipMax];
 else
   clipMin = clip(1);
@@ -46,13 +52,9 @@ result(image > clipMax) = clipMax;
 if isequal(clipMax-clipMin,0)
   rgb = clipMax*ones([size(image),3]);return
 else
-  % JG: This seems to assume that a colormap has 256 values
-  % or less, would be better not to make that assumption
-  % but that propogated some errors (the colorbar didn't fully paint)
-  % so keeping the assumption here.
-  indices = round(255 * ((result-clipMin)/(clipMax-clipMin)).^gamma) + 1;
+  indices = round((size(cmap,1)-1) * ((result-clipMin)/(clipMax-clipMin)).^gamma) + 1;
 end
-indices = max(1,min(indices,size(cmap,1)));
+indices = min(size(cmap,1),max(indices,1)); %this replaces NaNs by the lowest index (as it says it should in the header)
 
 % Extract r,g,b components
 r = zeros(size(image));

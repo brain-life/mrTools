@@ -64,6 +64,9 @@ if ~isfield(params,'numberFtests') || isempty(params.numberFtests)
     params.numberFtests = 0;
   end
 end
+if ~isfield(params,'outputEstimatesAsOverlays') || isempty(params.outputEstimatesAsOverlays)
+  params.outputEstimatesAsOverlays = 0;
+end
 
 while keepAsking
     
@@ -213,7 +216,7 @@ while keepAsking
     
   paramsInfo = [paramsInfo {...
     {'stimDurationMode', stimDurationModeMenu, canonicalVisibleOption, 'How the duration of each stimulation is specified in the design matrix: ''Event-related'': each event has the minimum possible duration given the chosen supersampling (generally 1 TR); ''Block'': each event lasts until an event of a different type is found; ''Set value'': uses  the value specified in stimDuration parameter. ''From file'': the stimulus durations are read from the stim files (only mylog file type).'},...
-    {'stimDuration', stimDuration, canonicalVisibleOption, 'type=numeric', sprintf('incdec=[-%f %f]',framePeriod,framePeriod), 'minmax=[.05 inf]','incdecType=plusMinus', 'Duration of the boxcar function that will be convolved with the HRF model at each stimulation event (in sec, resolution=0.05s). For MGL/AFNI files, the duration will be rounded to the closest multiple of the frame period (TR), excluding 0.'},...
+    {'stimDuration', stimDuration, canonicalVisibleOption, 'type=numeric', sprintf('incdec=[-%f %f]',framePeriod,framePeriod), 'minmax=[.05 inf]','incdecType=plusMinus', 'Duration of the boxcar function that will be convolved with the HRF model at each stimulation event (in sec, resolution=0.05s). This is only used if StimDurationMode is set to ''Set value''. For MGL/AFNI files, the duration will be rounded to the closest multiple of the frame period (TR), excluding 0.'},...
     {'supersamplingMode', supersamplingModeMenu,superSamplingOption, 'How the design matrix super-sampling is determined. ''Set value'': supersampling value is set manually in the edit box below, usually to 1 (no super-sampling); ''Automatic'': supersampling is automatically chosen to accomodate the fine temporal resolution specified in the stim file (with a 20 Hz resolution limit).'},...
     {'estimationSupersampling',estimationSupersampling, deconvolutionVisibleOption,'incdec=[-1 1]','incdecType=plusMinus','minmax=[1 inf]','Supersampling factor of the deconvolution HRF model. Set this to more than 1 in order to resolve the estimated HDR at a temporal resolution that is less than the frame rate. This is only required if both the design and the acquisition have been designed to achieve subsample HDR estimation, and is not supported for MGL/AFNI stim files.'},...
     {'designSupersampling',designSupersampling, designSupersamplingOption,'incdec=[-1 1]','incdecType=plusMinus','minmax=[1 inf]','Supersampling factor of the GLM model. Set this to more than one in order to take into account stimulus times and duration that do not coincide with the frame period, or to round stimulus presentation times to the nearest sample onset. This is not supported for MGL/AFNI stim files.'},...
@@ -223,6 +226,7 @@ while keepAsking
     {'numberContrasts',params.numberContrasts,'minmax=[0 inf]','incdec=[-1 1]','incdecType=plusMinus', 'Number of contrasts on which to perform a T-test. Both contrast values and inference test outcomes will be ouput as overlays.'},...
     {'computeTtests', params.computeTtests,'type=checkbox', 'visible=0', 'Whether contrasts are tested for significance using T-tests'},...
     {'numberFtests',params.numberFtests,'minmax=[0 inf]','incdec=[-1 1]','incdecType=plusMinus','Number of F-tests to be computed and output as overlays. An F-test tests the overall significance of a collection of contrasts. A collection of contrast is defined by a restriction matrix (one contrast per row) '},...
+    {'outputEstimatesAsOverlays',params.outputEstimatesAsOverlays,'type=checkbox','If this is checked, all model parameter estimates will be output as overlays in addition to any contrast estimate.'},...
      }];
 
   % now we have all the dialog information, ask the user to set parameters
@@ -248,6 +252,10 @@ while keepAsking
     disp('User changed the number of EVs')
   elseif strcmp(scanParams{params.scanNum(1)}.stimDurationMode,'Set value') && isempty(scanParams{params.scanNum(1)}.stimDuration)
     mrWarnDlg('Please set a stim duration value');
+  elseif length(tempParams.EVnames)~=tempParams.numberEVs
+    mrWarnDlg('Please enter a name for all the EVs');
+  elseif ~isequal(sort(tempParams.EVnames),unique(tempParams.EVnames))
+    mrWarnDlg('All the EV names must be different');
   else
     keepAsking = 0;
   end

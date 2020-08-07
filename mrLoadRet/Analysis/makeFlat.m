@@ -33,7 +33,7 @@ if ~isempty(baseCoordMap)
   innerCoordsFileName = setext(baseCoordMap.innerCoordsFileName,'off');
 
   % now see if user has to go find file;
-  if ~isfile(fullfile(baseCoordMapPath,innerCoordsFileName))
+  if ~mlrIsFile(fullfile(baseCoordMapPath,innerCoordsFileName))
     startPathStr = baseCoordMapPath;
     filterspec = {'*.off','SurfRelax off file';'*WM*.off', 'SurfRelax OFF WM file'; '*.*','All files'};
     title = 'Choose inner (WM) OFF surface file';    
@@ -131,7 +131,7 @@ if ~isempty(flatBase)
   % later - but is it worth storing this some place in the
   % structure rather than as a file which migth get lost)? -jg
   %tempFileName = fullfile(params.path,params.flatFileName);
-  %if isfile(tempFileName),delete(tempFileName);end
+  %if mlrIsFile(tempFileName),delete(tempFileName);end
 end
 
 return;
@@ -191,7 +191,7 @@ else
 end
 
 % remove the 3d patch, b/c it isn't need for anything
-if isfile(fullfile(params.path, params.patchFileName))
+if mlrIsFile(fullfile(params.path, params.patchFileName))
   system(sprintf('rm -rf %s', fullfile(params.path, params.patchFileName)));
 end
 
@@ -207,11 +207,16 @@ function [surf, params] = loadSurfHandler(params)
 % now load the rest of the surfaces
 
 % read in the anatomy file
-[surf.anat.data  surf.anat.hdr] = mlrImageReadNifti(fullfile(params.path, params.anatFileName));
+if isempty(fileparts(params.anatFileName))
+  anatFileName = fullfile(params.path, params.anatFileName);
+else
+  anatFileName = params.anatFileName;
+end
+[surf.anat.data  surf.anat.hdr] = mlrImageReadNifti(anatFileName);
 % get vol2tal and vol2mag from the anatomy file
-matFileName = [stripext(params.anatFileName) '.mat'];
-if(exist([params.path '/' matFileName]))
-  load([params.path '/' matFileName]);
+matFileName = [stripext(anatFileName) '.mat'];
+if(exist(matFileName))
+  load(matFileName);
   [tf base] = isbase(base);
   params.vol2mag = base.vol2mag;
   params.vol2tal = base.vol2tal;
@@ -256,10 +261,19 @@ mesh.faceIndexList  = surf.inner.tris;
 mesh.rgba           = surf.curv;
 mesh.normal = surf.inner.vtcs - surf.outer.vtcs;
 
+%get base anatomy voxel size
+if isempty(fileparts(params.anatFileName))
+  anatFileName = fullfile(params.path, params.anatFileName);
+else
+  anatFileName = params.anatFileName;
+end
+hdr = cbiReadNiftiHeader(anatFileName);
+voxelSize=hdr.pixdim(2:4);
+
 % run a modified version of the mrFlatMesh code
 % this outputs and flattened surface
 disppercent(-inf,'(makeFlat) Calling flattenSurfaceMFM');
-surf.flat = flattenSurfaceMFM(mesh, [params.x params.y params.z], params.radius);
+surf.flat = flattenSurfaceMFM(mesh, [params.x params.y params.z], params.radius,voxelSize');
 disppercent(inf);
 
 % we need to figure out whether the flattened patch has been flipped

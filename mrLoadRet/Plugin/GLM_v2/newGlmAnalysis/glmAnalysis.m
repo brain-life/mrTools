@@ -86,7 +86,10 @@ if params.spatialSmoothing  %we'll also need a margin if we're spatially smoothi
   end
 end
 %--------------------------------------------------------- Main loop over scans ---------------------------------------------------
-set(viewGet(thisView,'figNum'),'Pointer','watch');drawnow;
+figNum = viewGet(thisView,'figNum');
+if ~isempty(figNum)
+  set(figNum,'Pointer','watch');drawnow;
+end
 %initialize the data we're keeping for output overlays
 precision = mrGetPref('defaultPrecision');
 r2 = cell(1,params.scanNum(end));
@@ -367,13 +370,15 @@ for iScan = params.scanNum
 
       %compute the design matrix for this permutation
       d = makeDesignMatrix(d,params,verbose, iScan);
-      if ~testDesignMatrix(d.scm,d.nhdr,d.nHrfComponents,params.EVnames)
-        mrErrorDlg(sprintf('(glmAnalysis) Not enough data in scan %i to estimate all EV components',iScan));
+      d.emptyEVcomponents = testDesignMatrix(d.scm,d.nhdr,d.nHrfComponents,params.EVnames);
+      if ~isempty(d.emptyEVcomponents)
+        % for deconvolution with design supersampling, some components might be impossible to estimate
+        mrWarnDlg(sprintf('(glmAnalysis) Not enough data in scan %i to estimate all EV components, ignoring empty components (This has not been tested...)',iScan));
+        %they will be removed from the design matrix in getGlmStatistics and their parameter estimates replaced by NaNs
       end
 
       % compute estimates and statistics
       [d, out] = getGlmStatistics(d, params, verbose, precision, actualData);%, computeTtests,computeBootstrap);
-       
       
     
       if iPerm==1
@@ -710,6 +715,39 @@ for iScan = params.scanNum
 end
 clear('r2');
 
+%------------------------------------------------------ save parameter estimates as overlays
+if params.outputEstimatesAsOverlays
+  %find the values for the scale of the beta overlays
+  thisOverlay = defaultOverlay;
+  ordered_abs_betas=[];
+  for iScan = params.scanNum
+    ordered_abs_betas = [ordered_abs_betas; glmAnal.d{iScan}.ehdr];
+  end
+  ordered_abs_betas = ordered_abs_betas(~isnan(ordered_abs_betas));
+  min_beta = min(min(min(min(min(ordered_abs_betas)))));
+  max_beta = max(max(max(max(max(ordered_abs_betas)))));
+  ordered_abs_betas = sort(abs(ordered_abs_betas));
+  beta_perc95 = 0; 
+  beta_perc95 = max(beta_perc95,ordered_abs_betas(round(numel(ordered_abs_betas)*.95))); %take the 95th percentile for the min/max
+  thisOverlay.range = [-beta_perc95 beta_perc95];
+  thisOverlay.clip = [min_beta max_beta];
+  thisOverlay.colormap = jet(256);
+  for iBeta = 1:params.numberEVs
+    for iComponent = 1:size(glmAnal.d{iScan}.ehdr,5)
+      overlays(end+1)=thisOverlay;
+      if size(glmAnal.d{iScan}.ehdr,5)==1
+        overlays(end).name = params.EVnames{iBeta};
+      else
+        overlays(end).name = [params.EVnames{iBeta} ' - Component ' num2str(iComponent)];
+      end
+      for iScan = params.scanNum
+        overlays(end).data{iScan} = glmAnal.d{iScan}.ehdr(:,:,:,iBeta,iComponent);
+        overlays(end).params{iScan} = scanParams{iScan};
+      end
+    end
+  end
+end
+  
 %--------------------------------------------- save the contrast beta weights overlay(s) (ehdr if no contrast)
 contrastNames = makeContrastNames(params.contrasts,params.EVnames,params.tTestSide);
 if numberContrasts && (nnz(params.componentsToTest)==1 || strcmp(params.componentsCombination,'Add'))
@@ -942,9 +980,14 @@ if numberTests
       case {'Z value','-log10(P) value'}
         betaAlphaOverlayExponent = .5;      %or normal masking for Z or log10(p) values
     end
-    for iContrast = 2:numberContrasts+1
-      overlays(iContrast).alphaOverlayExponent=betaAlphaOverlayExponent;
-      overlays(iContrast).alphaOverlay = overlays(lastContrastAlphaOverlay-numberFtests-numberContrasts+iContrast-1).name;
+    if ~params.outputEstimatesAsOverlays
+      firstContrastOverlay = 2;
+    else
+      firstContrastOverlay = params.numberEVs * size(glmAnal.d{iScan}.ehdr,5) + 2;
+    end
+    for iContrast = 1:numberContrasts
+      overlays(firstContrastOverlay + iContrast - 1).alphaOverlayExponent=betaAlphaOverlayExponent;
+      overlays(firstContrastOverlay + iContrast - 1).alphaOverlay = overlays(lastContrastAlphaOverlay-numberFtests-numberContrasts+iContrast).name;
     end
   end
   
@@ -984,8 +1027,10 @@ saveAnalysis(thisView,glmAnal.name);
 
 oneTimeWarning('nonZeroHrfStart',0);
 oneTimeWarning('tfceOutputsZeros',0);
-set(viewGet(thisView,'figNum'),'Pointer','arrow');
-refreshMLRDisplay(viewGet(thisView,'viewNum'));
+if ~isempty(figNum)
+  set(figNum,'Pointer','arrow');
+  refreshMLRDisplay(viewGet(thisView,'viewNum'));
+end
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% sub routines

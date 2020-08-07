@@ -112,11 +112,11 @@ for roinum = 1:length(roiname)
         roiname{roinum} = viewGet(view,'roinum',roiname{roinum});
     end
     % see if we have to paste roi directory on
-    if ischar(roiname{roinum}) && ~isfile(sprintf('%s.mat',stripext(roiname{roinum})))
+    if ischar(roiname{roinum}) && ~mlrIsFile(sprintf('%s.mat',stripext(roiname{roinum})))
         roiname{roinum} = fullfile(roidir,stripext(roiname{roinum}));
     end
     % check for file
-    if ischar(roiname{roinum}) && ~isfile(sprintf('%s.mat',stripext(roiname{roinum})))
+    if ischar(roiname{roinum}) && ~mlrIsFile(sprintf('%s.mat',stripext(roiname{roinum})))
         disp(sprintf('(loadROITSeries) Could not find roi %s',roiname{roinum}));
         dir(fullfile(roidir,'*.mat'))
     elseif isnumeric(roiname{roinum}) && ((roiname{roinum} < 1) || (roiname{roinum} > viewGet(view,'numberOfROIs')))
@@ -146,7 +146,7 @@ for roinum = 1:length(roiname)
                 rois{end}.groupNum = groupNum;
                 % convert to scan coordinates
 		if isempty(matchScanNum)
-		  rois{end}.scanCoords = getROICoordinates(view,rois{end},scanNum,groupNum,'straightXform',straightXform);
+		  [rois{end}.scanCoords rois{end}.scan2roi] = getROICoordinates(view,rois{end},scanNum,groupNum,'straightXform',straightXform);
 		else
 		  rois{end}.scanCoords = getROICoordinatesMatching(view,rois{end},scanNum,matchScanNum,groupNum,matchGroupNum);
 		end
@@ -210,6 +210,16 @@ for roinum = 1:length(roiname)
             end
         end
     end
+end
+% add some fields
+if isview(view)
+  for iROI = 1:length(rois)
+    if isfield(rois{iROI},'scanNum') && isfield(rois{iROI},'groupNum')
+      rois{iROI}.concatInfo = viewGet(view,'concatInfo',rois{iROI}.scanNum,rois{iROI}.groupNum);
+      rois{iROI}.framePeriod = viewGet(view,'framePeriod',rois{iROI}.scanNum,rois{iROI}.groupNum);
+      rois{iROI}.nFrames = viewGet(view,'nFrames',rois{iROI}.scanNum,rois{iROI}.groupNum);
+    end
+  end
 end
 if length(rois) == 1
     rois = rois{1};

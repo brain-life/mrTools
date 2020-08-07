@@ -44,6 +44,9 @@ if ieNotDefined('params')
   end
 end
 
+% check params (and possibly reformat to latest version)
+params = checkEventRelatedParams(params);
+  
 % just return parameters
 if justGetParams
   d = params;
@@ -91,7 +94,7 @@ r2.colormapType = 'setRangeToMax';
 r2.interrogator = 'eventRelatedPlot';
 r2.mergeFunction = 'defaultMergeParams';
 
-tic
+startTime = mglGetSecs;
 set(viewGet(view,'figNum'),'Pointer','watch');drawnow;
 for scanNum = params.scanNum
   % decide how many slices to do at a time, this is done
@@ -117,10 +120,17 @@ for scanNum = params.scanNum
     sliceEhdr = [];sliceEhdrste = [];sliceR2 = [];
     for j = 1:ceil(dims(1)/numRowsAtATime)
       % load the scan
+      loadStartTime = mglGetSecs;
       thisRows = [currentRow min(dims(1),currentRow+numRowsAtATime-1)];
       d = loadScan(view,scanNum,[],thisSlices,precision,thisRows);
+      % display how long that took
+      if (mglGetSecs-loadStartTime) > 30
+	disp(sprintf('(eventRelated) Load took: %s',mlrDispElapsedTime(mglGetSecs-loadStartTime)));
+      end
+      % clock how long the rest takes
+      analStartTime = mglGetSecs;
       % get the stim volumes, if empty then abort
-      d = getStimvol(d,params.scanParams{scanNum});
+      d = getStimvol(d,params.scanParams{scanNum}.stimvolVarInfo);
       if isempty(d.stimvol),mrWarnDlg('No stim volumes found');return,end
       % do any called for preprocessing
       d = eventRelatedPreProcess(d,params.scanParams{scanNum}.preprocess);
@@ -142,6 +152,10 @@ for scanNum = params.scanNum
 	sliceEhdrste = cat(1,sliceEhdrste,d.ehdrste);
 	sliceR2 = cat(1,sliceR2,d.r2);
       end
+      % display how long that took
+      if (mglGetSecs-analStartTime) > 30
+	disp(sprintf('(eventRelated) Analysis took: %s',mlrDispElapsedTime(mglGetSecs-analStartTime)));
+      end
     end
     % update the current slice we are working on
     currentSlice = currentSlice+numSlicesAtATime;
@@ -158,7 +172,12 @@ for scanNum = params.scanNum
 
   % get the actual size of the data (not just the size of the last
   % slice/set of rows we were working on).
-  d.dim(1:3) = size(d.r2);
+  % check if this a single slice
+  r2size = size(d.r2);
+  if length(r2size) == 2
+    r2size(3) = 1;
+  end
+  d.dim(1:3) = r2size;
 
   % save the r2 overlay
   r2.data{scanNum} = d.r2;
@@ -180,7 +199,8 @@ for scanNum = params.scanNum
   erAnal.d{scanNum}.expname = d.expname;
   erAnal.d{scanNum}.fullpath = d.fullpath;
 end
-toc
+disp(sprintf('(eventRelated) Analysis took: %s',mlrDispElapsedTime(mglGetSecs-startTime)));
+
 
 % install analysis
 erAnal.name = params.saveName;
@@ -217,3 +237,37 @@ if nargout > 1
   end
 end
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%    checkEventRelatedParams    %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function params = checkEventRelatedParams(params)
+  
+if isempty(params)
+  disp(sprintf('(eventRelated:checkEventRelatedParams) Empty params'));
+  return
+end
+
+% convert scanParams if necessary from old to new style. New style
+% has one field call stimvolVarInfo which contains the varname, taskNum, segmentNum and phaseNum
+% for computing stimvols using getStimvol. This was done so that stimvolVarInfo can
+% be a cell array with multiple variable settings in it (which will get concatenated)
+for scanNum = params.scanNum
+  if ~isempty(params.scanParams{scanNum}) && ~isfield(params.scanParams{scanNum},'stimvolVarInfo')
+    fieldsToMove = {'phaseNum','taskNum','segmentNum','varname','stimtrace'};
+    for iField = 1:length(fieldsToMove)
+      if isfield(params.scanParams{scanNum},fieldsToMove{iField})
+	% copy into the combined stimvolVarInfo field
+	params.scanParams{scanNum}.stimvolVarInfo.(fieldsToMove{iField}) = params.scanParams{scanNum}.(fieldsToMove{iField});
+	% and remove from original location
+	params.scanParams{scanNum} = rmfield(params.scanParams{scanNum},fieldsToMove{iField});
+      end
+    end
+  end
+  % check for old style
+  if ~isfield(params.scanParams{scanNum},'stimvolVarInfo')
+    % this should not happen - it means that none of the usual fields for
+    % what stimulus event to trigger off of have been set.
+    disp(sprintf('(eventRelated:checkEventRelatedParams) No mgl stimfile information available.'));
+    params.scanParams{scanNum}.stimvolVarInfo = [];
+  end
+end
